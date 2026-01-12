@@ -1,0 +1,523 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LeetCode 25: K个一组翻转链表可视化</title>
+    <style>
+        :root {
+            --node-size: 60px;
+            --bg-color: #f0f2f5;
+            --primary-color: #1890ff;
+            --danger-color: #ff4d4f;
+            --success-color: #52c41a;
+            --warning-color: #faad14;
+            --purple-color: #722ed1;
+        }
+        body {
+            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-color);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+        }
+        h2 { color: #333; }
+        #canvas-container {
+            position: relative;
+            width: 900px;
+            height: 400px;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            margin: 20px 0;
+            overflow: hidden; /* Hide overflow for arrows */
+        }
+
+        /* Node Styles */
+        .node {
+            position: absolute;
+            width: var(--node-size);
+            height: var(--node-size);
+            background: white;
+            border: 3px solid #333;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 20px;
+            z-index: 2;
+            transition: background-color 0.3s, border-color 0.3s;
+        }
+        .node.highlight-group { background-color: #e6f7ff; border-color: var(--primary-color); }
+        .node.highlight-reversing { background-color: #fff1f0; border-color: var(--danger-color); }
+
+        /* SVG Arrows */
+        #svg-layer {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            z-index: 1;
+            pointer-events: none;
+        }
+        .arrow-line {
+            stroke: #999; stroke-width: 3; fill: none;
+            transition: all 0.3s ease;
+        }
+        .arrow-line.changing { stroke: var(--danger-color); stroke-width: 4; }
+
+        /* Pointer Labels */
+        .label-container {
+            position: absolute;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            z-index: 3;
+            transition: all 0.3s ease;
+        }
+        .label-tag {
+            font-size: 12px; color: white; padding: 4px 8px;
+            border-radius: 4px; margin-bottom: 2px; white-space: nowrap;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+            font-family: monospace;
+        }
+        /* Label Color Coding */
+        .lbl-head { background-color: var(--danger-color); }
+        .lbl-start { background-color: var(--primary-color); }
+        .lbl-end { background-color: var(--primary-color); }
+        .lbl-preLast { background-color: var(--purple-color); }
+        /* Reverse internal pointers */
+        .lbl-cur { background-color: var(--success-color); }
+        .lbl-pre { background-color: #8c8c8c; }
+        .lbl-next { background-color: var(--warning-color); }
+
+        /* Controls and Explanation */
+        #control-panel {
+            display: flex; gap: 10px; margin-bottom: 20px;
+        }
+        button {
+            padding: 10px 20px; font-size: 16px; cursor: pointer;
+            background-color: var(--primary-color); color: white;
+            border: none; border-radius: 6px; transition: background 0.2s;
+        }
+        button:hover { background-color: #40a9ff; }
+        button:disabled { background-color: #d9d9d9; cursor: not-allowed; }
+
+        #explanation-box {
+            width: 900px;
+            min-height: 80px;
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+            border-left: 5px solid var(--primary-color);
+        }
+        #step-code { font-family: monospace; font-weight: bold; color: #333; margin-bottom: 8px; display: block;}
+        #step-desc { color: #555; }
+    </style>
+</head>
+<body>
+
+<h2>K个一组翻转链表 (Demo: 节点 1-8, K=3)</h2>
+
+<div id="canvas-container">
+    <svg id="svg-layer">
+        <defs>
+            <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+                <polygon points="0 0, 10 3.5, 0 7" fill="#999" />
+            </marker>
+            <marker id="arrowhead-changing" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+                <polygon points="0 0, 10 3.5, 0 7" fill="#ff4d4f" />
+            </marker>
+        </defs>
+    </svg>
+    <div id="nodes-layer">
+    </div>
+    <div id="labels-layer">
+    </div>
+</div>
+
+<div id="control-panel">
+    <button onclick="resetDemo()">重置 (Reset)</button>
+    <button id="nextBtn" onclick="nextStep()">下一步 (Next Step)</button>
+</div>
+
+<div id="explanation-box">
+    <span id="step-code">// 准备开始...</span>
+    <span id="step-desc">点击“下一步”开始执行算法演示。</span>
+</div>
+
+<script>
+    // ===========================
+    // 1. 数据结构与初始化定义
+    // ===========================
+
+    // 定义用于可视化的链表节点数据结构
+    let nodesData = [];
+    // 定义指针标签的状态 (存储指向的节点 ID)
+    let pointerLabels = {
+        head: null, start: null, end: null, preLast: null,
+        cur: null, pre: null, next: null // 用于 reverse 函数内部
+    };
+
+    // 初始化场景：创建 8 个节点的链表
+    function initData() {
+        nodesData = [
+            { id: 1, val: 1, nextId: 2, x: 100, y: 200 },
+            { id: 2, val: 2, nextId: 3, x: 200, y: 200 },
+            { id: 3, val: 3, nextId: 4, x: 300, y: 200 },
+            { id: 4, val: 4, nextId: 5, x: 400, y: 200 },
+            { id: 5, val: 5, nextId: 6, x: 500, y: 200 },
+            { id: 6, val: 6, nextId: 7, x: 600, y: 200 },
+            { id: 7, val: 7, nextId: 8, x: 700, y: 200 },
+            { id: 8, val: 8, nextId: null, x: 800, y: 200 }
+        ];
+        pointerLabels = { head: 1, start: null, end: null, preLast: null, cur: null, pre: null, next: null };
+        clearHighlights();
+    }
+
+    // 辅助函数：设置节点的 next 指针
+    function setNext(nodeId, nextNodeId) {
+        const node = nodesData.find(n => n.id === nodeId);
+        if (node) node.nextId = nextNodeId;
+    }
+
+    // 辅助函数：高亮/取消高亮节点
+    function highlightNodes(ids, type) {
+        clearHighlights();
+        ids.forEach(id => {
+            const el = document.getElementById(`node-${id}`);
+            if (el) el.classList.add(type);
+        });
+    }
+    function clearHighlights() {
+        document.querySelectorAll('.node').forEach(el => {
+            el.classList.remove('highlight-group', 'highlight-reversing');
+        });
+    }
+
+    // ===========================
+    // 2. 视图渲染逻辑 (View)
+    // ===========================
+
+    function renderScene(changingSourceId = null) {
+        renderNodes();
+        renderArrows(changingSourceId);
+        renderLabels();
+    }
+
+    function renderNodes() {
+        const container = document.getElementById('nodes-layer');
+        if (container.children.length === 0) {
+            nodesData.forEach(n => {
+                const el = document.createElement('div');
+                el.id = `node-${n.id}`;
+                el.className = 'node';
+                el.innerText = n.val;
+                el.style.left = `${n.x - 30}px`;
+                el.style.top = `${n.y - 30}px`;
+                container.appendChild(el);
+            });
+        }
+    }
+
+    function renderArrows(changingSourceId) {
+        const svg = document.getElementById('svg-layer');
+        // 只移除线条，保留 defs
+        const lines = svg.querySelectorAll('.arrow-line');
+        lines.forEach(line => line.remove());
+
+        nodesData.forEach(sourceNode => {
+            if (sourceNode.nextId !== null) {
+                const targetNode = nodesData.find(n => n.id === sourceNode.nextId);
+                if (targetNode) {
+                    drawArrow(svg, sourceNode, targetNode, sourceNode.id === changingSourceId);
+                }
+            }
+        });
+    }
+
+    function drawArrow(svg, source, target, isChanging) {
+        const path = document.createElementNS("http://www.w3.org/2000/svg", 'path');
+        const deltaX = target.x - source.x;
+        const deltaY = target.y - source.y;
+        const dist = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+        // 计算稍微短一点的终点，避免箭头被节点遮挡
+        const endX = target.x - (deltaX / dist) * 32;
+        const endY = target.y - (deltaY / dist) * 32;
+
+        // 使用贝塞尔曲线增加一点弧度，使得反向连接更清晰
+        const midX = (source.x + target.x) / 2;
+        const midY = (source.y + target.y) / 2;
+        // 如果是反向指（目标在源的左侧），增加较大的弧度
+        const curveOffset = (target.x < source.x) ? 60 : (Math.abs(target.x - source.x) > 150 ? -30 : 0);
+
+        const d = `M ${source.x} ${source.y} Q ${midX} ${midY + curveOffset} ${endX} ${endY}`;
+
+        path.setAttribute("d", d);
+        path.classList.add('arrow-line');
+        if (isMouseOver || isChanging) {
+            path.setAttribute("marker-end", "url(#arrowhead-changing)");
+            path.classList.add('changing');
+        } else {
+            path.setAttribute("marker-end", "url(#arrowhead)");
+        }
+        svg.appendChild(path);
+    }
+
+    function renderLabels() {
+        const layer = document.getElementById('labels-layer');
+        layer.innerHTML = '';
+
+        // 按节点 ID 分组标签
+        const labelsByNode = {};
+        for (let [key, val] of Object.entries(pointerLabels)) {
+            if (val !== null) {
+                if (!labelsByNode[val]) labelsByNode[val] = [];
+                labelsByNode[val].push(key);
+            }
+        }
+
+        for (let [nodeId, labels] of Object.entries(labelsByNode)) {
+            const node = nodesData.find(n => n.id == nodeId);
+            if (node) {
+                const container = document.createElement('div');
+                container.className = 'label-container';
+                // 标签显示在节点上方
+                container.style.left = `${node.x}px`;
+                container.style.top = `${node.y - 45 - (labels.length * 22)}px`;
+                container.style.transform = 'translateX(-50%)';
+
+                // 排序标签，保持显示顺序一致性 (例如 head 总在最上面)
+                const order = ['head', 'preLast', 'start', 'end', 'next', 'cur', 'pre'];
+                labels.sort((a,b) => order.indexOf(a) - order.indexOf(b));
+
+                labels.forEach(lblKey => {
+                    const tag = document.createElement('div');
+                    tag.className = `label-tag lbl-${lblKey}`;
+                    tag.innerText = lblKey;
+                    container.appendChild(tag);
+                });
+                layer.appendChild(container);
+            }
+        }
+    }
+
+    // ===========================
+    // 3. 算法步骤定义 (The Core Logic Visualization)
+    // ===========================
+    let currentStepIndex = 0;
+    let steps = [];
+
+    function defineSteps() {
+        steps = [
+            // --- 第一组准备 ---
+            {
+                code: 'ListNode start = head;',
+                desc: '初始化 start 指针指向 head。',
+                action: () => { pointerLabels.start = 1; }
+            },
+            {
+                code: 'ListNode end = checkValiable(start, k);',
+                desc: '检查从 start 开始是否有 K=3 个节点。找到第 3 个节点作为 end。',
+                action: () => { pointerLabels.end = 3; highlightNodes([1,2,3], 'highlight-group'); }
+            },
+            {
+                code: 'if(end == null) ... head = end;',
+                desc: 'end 不为空。将全局 head 更新为 end (节点 3)，这是翻转后的新头。',
+                action: () => { pointerLabels.head = 3; }
+            },
+            // === 开始 reverse(start:1, end:3) ===
+            {
+                code: 'reverse(start, end) -> e = e.next;',
+                desc: '进入 reverse 函数。首先将 e 指针后移一位 (变为 4)，作为循环终止边界。',
+                action: () => { pointerLabels.end = 4; highlightNodes([1,2,3], 'highlight-reversing'); }
+            },
+            {
+                code: 'ListNode pre = null, cur = s, next = null;',
+                desc: '初始化翻转所需的辅助指针：pre, cur (指向start), next。',
+                action: () => { pointerLabels.pre = null; pointerLabels.cur = 1; pointerLabels.next = null; }
+            },
+            // --- Reverse 循环 1 (处理节点 1) ---
+            {
+                code: 'while (cur != e) { next = cur.next;',
+                desc: '循环开始 (cur是1, e是4)。记录 next = cur.next (节点 2)。',
+                action: () => { pointerLabels.next = 2; }
+            },
+            {
+                code: 'cur.next = pre;',
+                desc: '【关键】改变指向：将 cur (1) 的 next 指向 pre (null)。',
+                action: () => { setNext(1, null); },
+                highlightChange: 1
+            },
+            {
+                code: 'pre = cur; cur = next;',
+                desc: '指针前移：pre 变为 1，cur 变为 2。',
+                action: () => { pointerLabels.pre = 1; pointerLabels.cur = 2; }
+            },
+            // --- Reverse 循环 2 (处理节点 2) ---
+            {
+                code: 'while (cur != e) { next = cur.next;',
+                desc: '循环继续 (cur是2, e是4)。记录 next = 3。',
+                action: () => { pointerLabels.next = 3; }
+            },
+            {
+                code: 'cur.next = pre;',
+                desc: '【关键】改变指向：将 cur (2) 的 next 指向 pre (1)。完成 2->1。',
+                action: () => { setNext(2, 1); },
+                highlightChange: 2
+            },
+            {
+                code: 'pre = cur; cur = next;',
+                desc: '指针前移：pre 变为 2，cur 变为 3。',
+                action: () => { pointerLabels.pre = 2; pointerLabels.cur = 3; }
+            },
+            // --- Reverse 循环 3 (处理节点 3) ---
+            {
+                code: 'while (cur != e) { next = cur.next;',
+                desc: '循环继续 (cur是3, e是4)。记录 next = 4。',
+                action: () => { pointerLabels.next = 4; }
+            },
+            {
+                code: 'cur.next = pre;',
+                desc: '【关键】改变指向：将 cur (3) 的 next 指向 pre (2)。完成 3->2。',
+                action: () => { setNext(3, 2); },
+                highlightChange: 3
+            },
+            {
+                code: 'pre = cur; cur = next;',
+                desc: '指针前移：pre 变为 3，cur 变为 4。现在 cur == e，循环将终止。',
+                action: () => { pointerLabels.pre = 3; pointerLabels.cur = 4; }
+            },
+            // --- Reverse 结束处理 ---
+            {
+                code: '} s.next = e;',
+                desc: '循环结束。将原来的头 start (1) 连接到边界 e (4)。第一组翻转完成。',
+                action: () => { setNext(1, 4); pointerLabels.cur=null; pointerLabels.pre=null; pointerLabels.next=null; clearHighlights();},
+                highlightChange: 1
+            },
+            // === 回到主函数 ===
+            {
+                code: 'ListNode preLast = start;',
+                desc: '回到主函数。start (1) 现在是第一组的尾部，记录为 preLast，用于连接下一组。',
+                action: () => { pointerLabels.preLast = 1; }
+            },
+            // --- 第二组循环开始 ---
+            {
+                code: 'while(preLast.next!=null) { start = preLast.next;',
+                desc: '主循环检查 preLast 后面还有节点。移动 start 到下一组开头 (节点 4)。',
+                action: () => { pointerLabels.start = 4; }
+            },
+            {
+                code: 'end = checkValiable(start, k);',
+                desc: '检查第二组是否有 K=3 个节点。找到 end 为节点 6。',
+                action: () => { pointerLabels.end = 6; highlightNodes([4,5,6], 'highlight-group');}
+            },
+            // === 开始 reverse(start:4, end:6) ===
+            {
+                code: 'reverse(start, end) -> e = e.next;',
+                desc: '再次调用 reverse。e 后移变为 7。',
+                action: () => { pointerLabels.end = 7; highlightNodes([4,5,6], 'highlight-reversing'); }
+            },
+            {
+                code: '初始化 reverse 指针...',
+                desc: '初始化 pre=null, cur=4, next=null。',
+                action: () => { pointerLabels.pre = null; pointerLabels.cur = 4; pointerLabels.next = null; }
+            },
+            // ... 省略第二组具体的每一步循环演示，直接快进到结果，避免演示太长 ...
+            {
+                code: '执行 reverse(4, 7) 循环过程...',
+                desc: '（快速演示）内部循环执行：4->null, 5->4, 6->5。cur 变为 7。',
+                action: () => {
+                    setNext(4, null); setNext(5, 4); setNext(6, 5);
+                    pointerLabels.pre=6; pointerLabels.cur=7; pointerLabels.next=7;
+                },
+                highlightChange: 6 // Highlight last change
+            },
+            {
+                code: '} s.next = e;',
+                desc: '循环结束。原头 start (4) 连接到边界 e (7)。第二组翻转完成。',
+                action: () => { setNext(4, 7); pointerLabels.cur=null; pointerLabels.pre=null; pointerLabels.next=null; clearHighlights();},
+                highlightChange: 4
+            },
+            // === 回到主函数连接组 ===
+            {
+                code: 'preLast.next = end;',
+                desc: '【关键连接】将上一组的尾巴 preLast (1) 连接到当前组翻转后的头 end (注意:这里代码逻辑的 end 实际上是指向 6, 虽然可视化里 end 指针为了 reverse 跑到了 7，我们需要逻辑上的 end 即 pre指针)。我们将 1 指向 6。',
+                // 在代码逻辑中，reverse调用后，end 变量还是指向 6 的（在 e=e.next 之前）。
+                // 这里的可视化为了展示方便，需要稍微调整一下说明。
+                // preLast.next 应该指向当前组新的头，也就是 reverse 结束时的 'pre' 指针指向的节点(6)。
+                action: () => { setNext(1, 6); pointerLabels.end = 6; /*修正end显示*/ },
+                highlightChange: 1
+            },
+            {
+                code: 'preLast = start;',
+                desc: '更新 preLast。当前组原来的头 start (4) 变成了现在的尾。',
+                action: () => { pointerLabels.preLast = 4; }
+            },
+            // --- 第三组循环尝试 ---
+            {
+                code: 'while(...) { start = preLast.next;',
+                desc: '主循环继续。移动 start 到下一组开头 (节点 7)。',
+                action: () => { pointerLabels.start = 7; }
+            },
+            {
+                code: 'end = checkValiable(start, k);',
+                desc: '检查剩余节点。只有 7, 8 两个节点，不足 K=3 个。checkValiable 返回 null。',
+                action: () => { pointerLabels.end = null; highlightNodes([7,8], 'highlight-group'); }
+            },
+            {
+                code: 'if(end==null) { return head; }',
+                desc: 'end 为 null，直接返回当前的 head。剩余节点不翻转。算法结束。',
+                action: () => {
+                    clearHighlights();
+                    // 清理不必要的指针显示，只留结果
+                    pointerLabels.start=null; pointerLabels.preLast=null;
+                    document.getElementById('nextBtn').disabled = true;
+                    document.getElementById('nextBtn').innerText = "演示结束";
+                }
+            }
+        ];
+    }
+
+    // ===========================
+    // 4. 控制逻辑 (Controller)
+    // ===========================
+
+    function nextStep() {
+        if (currentStepIndex < steps.length) {
+            const step = steps[currentStepIndex];
+            // 更新文字说明
+            document.getElementById('step-code').innerText = step.code;
+            document.getElementById('step-desc').innerText = step.desc;
+            // 执行动作更新数据
+            step.action();
+            // 重新渲染视图
+            renderScene(step.highlightChange || null);
+            currentStepIndex++;
+        }
+    }
+
+    function resetDemo() {
+        currentStepIndex = 0;
+        initData();
+        defineSteps();
+        document.getElementById('nodes-layer').innerHTML = ''; // 清空节点重建
+        document.getElementById('step-code').innerText = '// 准备开始...';
+        document.getElementById('step-desc').innerText = '点击“下一步”开始执行算法演示。';
+        document.getElementById('nextBtn').disabled = false;
+        document.getElementById('nextBtn').innerText = "下一步 (Next Step)";
+        renderScene();
+    }
+
+    // 用于箭头鼠标悬停效果的标志
+    let isMouseOver = false;
+    document.getElementById('svg-layer').addEventListener('mouseover', () => { isMouseOver = true; });
+    document.getElementById('svg-layer').addEventListener('mouseout', () => { isMouseOver = false; });
+
+    // 启动
+    resetDemo();
+
+</script>
+</body>
+</html>
