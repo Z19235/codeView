@@ -1,0 +1,579 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3Sum & 3Sum Closest 算法可视化 (修复版)</title>
+    <style>
+        :root {
+            --bg-color: #f8fafc;
+            --primary-color: #3b82f6;
+            --success-color: #10b981;
+            --warn-color: #f59e0b;
+            --danger-color: #ef4444;
+            --purple-color: #8b5cf6;
+            --node-size: 50px;
+            --node-gap: 20px;
+        }
+
+        body {
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            background-color: var(--bg-color);
+            margin: 0;
+            padding: 40px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            color: #334155;
+        }
+
+        h1 { margin-bottom: 40px; color: #1e293b; border-bottom: 2px solid #e2e8f0; padding-bottom: 10px; width: 100%; max-width: 1200px; }
+        h2 { margin: 0 0 15px 0; color: #334155; font-size: 20px; display: flex; align-items: center; gap: 10px; }
+        .badge { background: #334155; color: white; padding: 2px 8px; border-radius: 4px; font-size: 14px; }
+
+        .section-container {
+            width: 100%;
+            max-width: 1200px;
+            margin-bottom: 60px;
+            border-bottom: 1px dashed #cbd5e1;
+            padding-bottom: 60px;
+        }
+        .section-container:last-child { border-bottom: none; }
+
+        .viz-layout {
+            display: flex;
+            gap: 20px;
+            height: 600px; /* 稍微增加高度以容纳指针 */
+        }
+
+        .viz-panel {
+            flex: 2;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+            border: 1px solid #e2e8f0;
+            overflow: hidden; /* 防止溢出 */
+        }
+
+        .status-bar {
+            background: #f1f5f9;
+            border-left: 5px solid var(--primary-color);
+            padding: 15px;
+            border-radius: 6px;
+            margin-bottom: 20px;
+            flex-shrink: 0;
+        }
+        .status-text { font-size: 15px; color: #0f172a; font-weight: 500; margin-bottom: 8px; }
+        .math-display {
+            font-family: 'Consolas', monospace;
+            font-size: 16px;
+            background: white;
+            padding: 6px 10px;
+            border-radius: 4px;
+            border: 1px solid #e2e8f0;
+            display: inline-block;
+            color: #475569;
+        }
+        .highlight-val { color: var(--danger-color); font-weight: bold; }
+
+        /* Array Container */
+        .array-wrapper {
+            position: relative;
+            flex: 1;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 200px; /* 保证有足够空间显示上下指针 */
+            background: #fafafa;
+            border-radius: 8px;
+            border: 1px dashed #e2e8f0;
+            margin-bottom: 20px;
+        }
+
+        .node {
+            width: var(--node-size);
+            height: var(--node-size);
+            background: white;
+            border: 2px solid #cbd5e1;
+            border-radius: 8px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-weight: bold;
+            font-size: 18px;
+            color: #334155;
+            margin: 0 calc(var(--node-gap) / 2);
+            position: relative;
+            transition: all 0.3s ease;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            z-index: 2; /* 节点层级 */
+        }
+        .node-idx { position: absolute; bottom: -25px; font-size: 12px; color: #94a3b8; font-weight: normal; }
+        .node.active { border-color: var(--primary-color); background-color: #eff6ff; transform: scale(1.1); z-index: 5; }
+
+        /* Pointers */
+        .pointer {
+            position: absolute;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            transition: left 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+            width: 40px;
+            z-index: 10; /* 指针在最上层 */
+            pointer-events: none; /* 防止遮挡鼠标点击 */
+        }
+        .pointer-label {
+            padding: 4px 8px;
+            border-radius: 4px;
+            color: white;
+            font-weight: bold;
+            font-size: 12px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+            white-space: nowrap;
+        }
+        .pointer-arrow { width: 0; height: 0; border-style: solid; }
+
+        /* Pointer Styles */
+        /* i: Bottom Up */
+        .ptr-i { bottom: 20%; flex-direction: column-reverse; }
+        .ptr-i .pointer-label { background-color: var(--primary-color); margin-top: 4px; }
+        .ptr-i .pointer-arrow { border-width: 0 6px 8px 6px; border-color: transparent transparent var(--primary-color) transparent; }
+
+        /* j: Top Down */
+        .ptr-j { top: 20%; }
+        .ptr-j .pointer-label { background-color: var(--success-color); margin-bottom: 4px; }
+        .ptr-j .pointer-arrow { border-width: 8px 6px 0 6px; border-color: var(--success-color) transparent transparent transparent; }
+
+        /* k: Top Down */
+        .ptr-k { top: 20%; }
+        .ptr-k .pointer-label { background-color: var(--danger-color); margin-bottom: 4px; }
+        .ptr-k .pointer-arrow { border-width: 8px 6px 0 6px; border-color: var(--danger-color) transparent transparent transparent; }
+
+        .code-panel {
+            flex: 1;
+            background: #1e1e1e;
+            border-radius: 12px;
+            padding: 15px;
+            overflow-y: auto;
+            color: #d4d4d4;
+            font-family: 'Consolas', monospace;
+            font-size: 13px;
+            line-height: 1.6;
+        }
+        .code-line { padding: 0 8px; border-left: 3px solid transparent; }
+        .code-line.active { background-color: #374151; border-left-color: var(--primary-color); color: white; }
+        .indent-1 { padding-left: 20px; }
+        .indent-2 { padding-left: 40px; }
+        .indent-3 { padding-left: 60px; }
+        .indent-4 { padding-left: 80px; }
+
+        .controls {
+            margin-top: auto;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-top: 1px solid #e2e8f0;
+            padding-top: 15px;
+            flex-shrink: 0;
+        }
+        .res-container { font-size: 14px; }
+        .res-tag { display: inline-block; background: #dcfce7; color: #166534; padding: 2px 6px; border-radius: 4px; margin: 2px; font-weight: bold; font-size: 12px; border: 1px solid #bbf7d0; }
+
+        button {
+            padding: 8px 16px; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; transition: background 0.2s;
+        }
+        .btn-reset { background: #e2e8f0; color: #475569; margin-right: 8px; }
+        .btn-next { background: var(--primary-color); color: white; }
+        .btn-next:hover { background-color: #2563eb; }
+        .btn-next:disabled { background-color: #94a3b8; cursor: not-allowed; }
+    </style>
+</head>
+<body>
+<div id="global-back-btn" style="position: fixed; top: 15px; left: 15px; z-index: 9999; cursor: pointer; background: white; padding: 8px 12px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); display: flex; align-items: center; gap: 6px; font-family: 'Segoe UI', sans-serif; border: 1px solid #e2e8f0; transition: all 0.2s; user-select: none;">
+    <span style="font-size: 16px;">🔙</span>
+    <span style="font-weight: 600; font-size: 14px; color: #334155;">返回目录</span>
+</div>
+
+<h1>LeetCode 三数之和系列可视化</h1>
+
+<div class="section-container">
+    <h2><span class="badge">15</span> 三数之和 (3Sum)</h2>
+    <div class="viz-layout">
+        <div class="viz-panel">
+            <div class="status-bar">
+                <div class="status-text" id="s1-status">初始化...</div>
+                <div class="math-display" id="s1-math"></div>
+            </div>
+            <div class="array-wrapper" id="s1-wrapper"></div>
+            <div class="controls">
+                <div class="res-container">结果: <span id="s1-res">[]</span></div>
+                <div>
+                    <button class="btn-reset" onclick="ThreeSum.reset()">重置</button>
+                    <button class="btn-next" id="s1-btn" onclick="ThreeSum.next()">下一步</button>
+                </div>
+            </div>
+        </div>
+        <div class="code-panel" id="s1-code"></div>
+    </div>
+</div>
+
+<div class="section-container">
+    <h2><span class="badge">16</span> 最接近的三数之和 (3Sum Closest)</h2>
+    <div class="viz-layout">
+        <div class="viz-panel">
+            <div class="status-bar" style="border-left-color: var(--purple-color);">
+                <div class="status-text" id="s2-status">初始化...</div>
+                <div class="math-display" id="s2-math"></div>
+            </div>
+            <div class="array-wrapper" id="s2-wrapper"></div>
+            <div class="controls">
+                <div class="res-container">
+                    Target: <strong style="color:var(--purple-color)">1</strong> |
+                    当前最接近和 (res): <span id="s2-res" class="highlight-val">?</span>
+                </div>
+                <div>
+                    <button class="btn-reset" onclick="ThreeSumClosest.reset()">重置</button>
+                    <button class="btn-next" id="s2-btn" onclick="ThreeSumClosest.next()" style="background-color: var(--purple-color)">下一步</button>
+                </div>
+            </div>
+        </div>
+        <div class="code-panel" id="s2-code"></div>
+    </div>
+</div>
+
+<script>
+    // ================= COMMON UTILS =================
+    const Utils = {
+        renderNodes: (wrapperId, nums, activeIndices = []) => {
+            const wrapper = document.getElementById(wrapperId);
+
+            // Only create nodes if count mismatches (init) or handle complete redraw
+            // For simplicity and robustness, we check basic existence.
+            const existingNodes = wrapper.querySelectorAll('.node');
+            if (existingNodes.length !== nums.length) {
+                // Remove all nodes but KEEP pointers if they exist (though pointers usually recreate)
+                // Safer: Clear all and let pointers regenerate.
+                wrapper.innerHTML = '';
+                nums.forEach((val, i) => {
+                    const el = document.createElement('div');
+                    el.className = 'node';
+                    el.id = `${wrapperId}-node-${i}`;
+                    el.innerHTML = `${val}<div class="node-idx">${i}</div>`;
+                    wrapper.appendChild(el);
+                });
+            }
+
+            // Update Node UI
+            const nodes = wrapper.querySelectorAll('.node');
+            nodes.forEach((el, i) => {
+                el.firstChild.textContent = nums[i];
+                el.className = 'node'; // Reset class
+                if (activeIndices.includes(i)) el.classList.add('active');
+            });
+        },
+
+        updatePointer: (wrapperId, ptrName, idx, colorClass, label) => {
+            const wrapper = document.getElementById(wrapperId);
+            const ptrId = `${wrapperId}-ptr-${ptrName}`;
+            let ptr = document.getElementById(ptrId);
+
+            // 1. Handle inactive pointer
+            if (idx === null || idx === undefined) {
+                if (ptr) ptr.style.display = 'none';
+                return;
+            }
+
+            // 2. Create if missing
+            if (!ptr) {
+                ptr = document.createElement('div');
+                ptr.id = ptrId;
+                ptr.className = `pointer ${colorClass}`;
+                if (colorClass === 'ptr-i') {
+                    ptr.innerHTML = `<div class="pointer-label">${label}</div><div class="pointer-arrow"></div>`;
+                } else {
+                    ptr.innerHTML = `<div class="pointer-arrow"></div><div class="pointer-label">${label}</div>`;
+                }
+                wrapper.appendChild(ptr);
+            }
+            ptr.style.display = 'flex';
+
+            // 3. Position Calculation
+            // We need to wait for DOM layout if this is called immediately after node creation.
+            const node = document.getElementById(`${wrapperId}-node-${idx}`);
+            if (node) {
+                // Calculate position relative to the wrapper
+                // node.offsetLeft gives distance from left edge of wrapper (since wrapper is position:relative)
+                // We center the pointer (width 40px) on the node center
+                const centerX = node.offsetLeft + (node.offsetWidth / 2);
+                const ptrLeft = centerX - 20; // 20 is half of pointer width
+                ptr.style.left = `${ptrLeft}px`;
+            }
+        },
+
+        renderCode: (containerId, lines) => {
+            const box = document.getElementById(containerId);
+            box.innerHTML = lines.map((l, i) =>
+                `<div class="code-line indent-${l.indent}" id="${containerId}-line-${i}">${l.text.replace(/</g, '&lt;')}</div>`
+            ).join('');
+        },
+
+        highlightLine: (containerId, lineIdx) => {
+            const box = document.getElementById(containerId);
+            box.querySelectorAll('.code-line').forEach(l => l.classList.remove('active'));
+            if (lineIdx !== null) {
+                const line = document.getElementById(`${containerId}-line-${lineIdx}`);
+                if (line) {
+                    line.classList.add('active');
+                    line.scrollIntoView({block: 'center', behavior: 'smooth'});
+                }
+            }
+        }
+    };
+
+    // ================= ALGORITHM 1: 3SUM =================
+    const ThreeSum = (() => {
+        const CONFIG = {
+            nums: [-1, 0, 1, 2, -1, -4],
+            wrapperId: 's1-wrapper',
+            codeId: 's1-code',
+            statusId: 's1-status',
+            mathId: 's1-math',
+            resId: 's1-res',
+            btnId: 's1-btn'
+        };
+
+        const CODE = [
+            { text: "Arrays.sort(nums);", indent: 0 },
+            { text: "for(int i = 0; i < n-2; i++) {", indent: 0 },
+            { text: "if(nums[i] > 0) break;", indent: 1 },
+            { text: "if(i > 0 && duplicate) continue;", indent: 1 },
+            { text: "int j = i+1, k = n-1;", indent: 1 },
+            { text: "while(j < k) {", indent: 1 },
+            { text: "int sum = nums[i]+nums[j]+nums[k];", indent: 2 },
+            { text: "if(sum < 0) { j++; ... }", indent: 2 },
+            { text: "else if(sum > 0) { k--; ... }", indent: 2 },
+            { text: "else { res.add(...); j++; k--; }", indent: 2 },
+            { text: "}", indent: 1 },
+            { text: "}", indent: 0 }
+        ];
+
+        let steps = [];
+        let currIdx = 0;
+
+        function generate() {
+            steps = [];
+            let nums = [...CONFIG.nums];
+            let res = [];
+            nums.sort((a,b)=>a-b);
+            steps.push({nums: [...nums], i:null, j:null, k:null, res:[...res], msg:"排序数组", line:0});
+
+            for(let i=0; i<nums.length-2; i++) {
+                steps.push({nums: [...nums], i, j:null, k:null, res:[...res], msg:`固定 i=${i} (Val: ${nums[i]})`, line:1});
+                if(nums[i] > 0) { steps.push({nums: [...nums], i, j:null, k:null, res:[...res], msg:"nums[i]>0, 结束", line:2}); break; }
+                if(i>0 && nums[i] == nums[i-1]) { steps.push({nums: [...nums], i, j:null, k:null, res:[...res], msg:"跳过重复 i", line:3}); continue; }
+
+                let j = i+1, k = nums.length-1;
+                steps.push({nums: [...nums], i, j, k, res:[...res], msg:"初始化双指针", line:4});
+
+                while(j<k) {
+                    let sum = nums[i]+nums[j]+nums[k];
+                    steps.push({nums: [...nums], i, j, k, res:[...res], msg:`计算 Sum = ${sum}`, line:6});
+
+                    if(sum < 0) {
+                        steps.push({nums: [...nums], i, j, k, res:[...res], msg:"Sum < 0, 左指针右移", line:7});
+                        let old = nums[j]; j++; while(j<k && nums[j]==old) j++;
+                        steps.push({nums: [...nums], i, j, k, res:[...res], msg:"j 移动完毕", line:7});
+                    } else if (sum > 0) {
+                        steps.push({nums: [...nums], i, j, k, res:[...res], msg:"Sum > 0, 右指针左移", line:8});
+                        let old = nums[k]; k--; while(j<k && nums[k]==old) k--;
+                        steps.push({nums: [...nums], i, j, k, res:[...res], msg:"k 移动完毕", line:8});
+                    } else {
+                        res.push([nums[i], nums[j], nums[k]]);
+                        steps.push({nums: [...nums], i, j, k, res:[...res], msg:"Sum == 0, 记录结果", line:9});
+                        let oldJ = nums[j]; j++; while(j<k && nums[j]==oldJ) j++;
+                        let oldK = nums[k]; k--; while(j<k && nums[k]==oldK) k--;
+                        steps.push({nums: [...nums], i, j, k, res:[...res], msg:"指针去重后收缩", line:9});
+                    }
+                }
+            }
+            steps.push({nums: [...nums], i:null, j:null, k:null, res:[...res], msg:"完成", line:null});
+        }
+
+        function render(idx) {
+            if(idx >= steps.length) return;
+            const s = steps[idx];
+            Utils.renderNodes(CONFIG.wrapperId, s.nums, [s.i, s.j, s.k].filter(x=>x!==null));
+            Utils.updatePointer(CONFIG.wrapperId, 'i', s.i, 'ptr-i', 'i');
+            Utils.updatePointer(CONFIG.wrapperId, 'j', s.j, 'ptr-j', 'j');
+            Utils.updatePointer(CONFIG.wrapperId, 'k', s.k, 'ptr-k', 'k');
+
+            document.getElementById(CONFIG.statusId).innerText = s.msg;
+            document.getElementById(CONFIG.resId).innerHTML = s.res.map(r=>`<span class="res-tag">[${r}]</span>`).join('');
+
+            let mathTxt = "";
+            if(s.i!=null && s.j!=null && s.k!=null) {
+                mathTxt = `${s.nums[s.i]} + ${s.nums[s.j]} + ${s.nums[s.k]} = <b>${s.nums[s.i]+s.nums[s.j]+s.nums[s.k]}</b>`;
+            }
+            document.getElementById(CONFIG.mathId).innerHTML = mathTxt;
+            Utils.highlightLine(CONFIG.codeId, s.line);
+            document.getElementById(CONFIG.btnId).disabled = idx >= steps.length-1;
+        }
+
+        return {
+            init: () => { Utils.renderCode(CONFIG.codeId, CODE); generate(); render(0); },
+            next: () => { if(currIdx < steps.length-1) render(++currIdx); },
+            reset: () => { currIdx = 0; render(0); },
+            redraw: () => { render(currIdx); } // For resize
+        };
+    })();
+
+    // ================= ALGORITHM 2: 3SUM CLOSEST =================
+    const ThreeSumClosest = (() => {
+        const CONFIG = {
+            nums: [-1, 2, 1, -4],
+            target: 1,
+            wrapperId: 's2-wrapper',
+            codeId: 's2-code',
+            statusId: 's2-status',
+            mathId: 's2-math',
+            resId: 's2-res',
+            btnId: 's2-btn'
+        };
+
+        const CODE = [
+            { text: "Arrays.sort(nums); res = sum(nums[0..2]);", indent: 0 },
+            { text: "for(int i = 0; i < n-2; i++) {", indent: 0 },
+            { text: "if(i > 0 && duplicate) continue;", indent: 1 },
+            { text: "int j = i+1, k = n-1;", indent: 1 },
+            { text: "while(j < k) {", indent: 1 },
+            { text: "int sum = nums[i] + nums[j] + nums[k];", indent: 2 },
+            { text: "if(abs(target-sum) < abs(target-res)) res=sum;", indent: 2 },
+            { text: "if(sum < target) {", indent: 2 },
+            { text: "j++; // 小于 Target，变大", indent: 3 },
+            { text: "} else if(sum > target) {", indent: 2 },
+            { text: "k--; // 大于 Target，变小", indent: 3 },
+            { text: "} else return sum;", indent: 2 },
+            { text: "}", indent: 1 },
+            { text: "}", indent: 0 }
+        ];
+
+        let steps = [];
+        let currIdx = 0;
+
+        function generate() {
+            steps = [];
+            let nums = [...CONFIG.nums];
+            let target = CONFIG.target;
+
+            nums.sort((a,b)=>a-b);
+            let closest = nums[0] + nums[1] + nums[2];
+            steps.push({nums: [...nums], i:null, j:null, k:null, closest, msg:"排序并初始化", line:0});
+
+            for(let i=0; i<nums.length-2; i++) {
+                if(i>0 && nums[i]==nums[i-1]) { steps.push({nums: [...nums], i, j:null, k:null, closest, msg:"跳过重复 i", line:2}); continue; }
+
+                let j = i+1, k = nums.length-1;
+                steps.push({nums: [...nums], i, j, k, closest, msg:`固定 i=${i}, 初始化双指针`, line:3});
+
+                while(j<k) {
+                    let sum = nums[i] + nums[j] + nums[k];
+                    let diff = Math.abs(target - sum);
+                    let bestDiff = Math.abs(target - closest);
+                    let updateMsg = "";
+                    let newLine = 5; // calculating sum line
+
+                    if(diff < bestDiff) {
+                        closest = sum;
+                        updateMsg = "更接近! 更新 res";
+                        newLine = 6;
+                    } else {
+                        updateMsg = "没有更接近";
+                    }
+                    steps.push({nums: [...nums], i, j, k, closest, msg:`Sum=${sum} (差${diff}). ${updateMsg}`, line:newLine});
+
+                    if(sum < target) {
+                        steps.push({nums: [...nums], i, j, k, closest, msg:`Sum < Target, j 右移`, line:7});
+                        j++;
+                        steps.push({nums: [...nums], i, j, k, closest, msg:`j 移动完毕`, line:8});
+                    } else if (sum > target) {
+                        steps.push({nums: [...nums], i, j, k, closest, msg:`Sum > Target, k 左移`, line:9});
+                        k--;
+                        steps.push({nums: [...nums], i, j, k, closest, msg:`k 移动完毕`, line:10});
+                    } else {
+                        steps.push({nums: [...nums], i, j, k, closest, msg:`完全匹配，返回`, line:11});
+                        return;
+                    }
+                }
+            }
+            steps.push({nums: [...nums], i:null, j:null, k:null, closest, msg:`结束，结果: ${closest}`, line:null});
+        }
+
+        function render(idx) {
+            if(idx >= steps.length) return;
+            const s = steps[idx];
+            Utils.renderNodes(CONFIG.wrapperId, s.nums, [s.i, s.j, s.k].filter(x=>x!==null));
+            Utils.updatePointer(CONFIG.wrapperId, 'i', s.i, 'ptr-i', 'i');
+            Utils.updatePointer(CONFIG.wrapperId, 'j', s.j, 'ptr-j', 'j');
+            Utils.updatePointer(CONFIG.wrapperId, 'k', s.k, 'ptr-k', 'k');
+
+            document.getElementById(CONFIG.statusId).innerText = s.msg;
+            document.getElementById(CONFIG.resId).innerText = s.closest;
+
+            let mathTxt = "";
+            if(s.i!=null && s.j!=null && s.k!=null) {
+                const sum = s.nums[s.i]+s.nums[s.j]+s.nums[s.k];
+                const diff = Math.abs(CONFIG.target - sum);
+                mathTxt = `${s.nums[s.i]} + ${s.nums[s.j]} + ${s.nums[s.k]} = <b>${sum}</b> (Gap: ${diff})`;
+            }
+            document.getElementById(CONFIG.mathId).innerHTML = mathTxt;
+            Utils.highlightLine(CONFIG.codeId, s.line);
+            document.getElementById(CONFIG.btnId).disabled = idx >= steps.length-1;
+        }
+
+        return {
+            init: () => { Utils.renderCode(CONFIG.codeId, CODE); generate(); render(0); },
+            next: () => { if(currIdx < steps.length-1) render(++currIdx); },
+            reset: () => { currIdx = 0; render(0); },
+            redraw: () => { render(currIdx); }
+        };
+    })();
+
+    // Init
+    ThreeSum.init();
+    ThreeSumClosest.init();
+
+    // Resize Handler
+    window.addEventListener('resize', () => {
+        ThreeSum.redraw();
+        ThreeSumClosest.redraw();
+    });
+
+    document.getElementById('global-back-btn').addEventListener('click', () => {
+        // 逻辑：如果是被父窗口打开的（Blob URL模式），则关闭自己
+        if (window.opener) {
+            window.close();
+        }
+        // 逻辑：如果是直接打开文件的，则尝试回退或跳转
+        else {
+            if (document.referrer) {
+                window.history.back();
+            } else {
+                // 如果没有历史记录（直接双击打开），尝试跳转到同级目录下的 index.html
+                window.location.href = './index.html'; // 假设 index.html 在同级
+                // 或者尝试跳到上一级
+                // window.location.href = '../index.html';
+            }
+        }
+    });
+
+    // 鼠标悬停效果
+    const btn = document.getElementById('global-back-btn');
+    btn.onmouseover = () => { btn.style.transform = 'translateY(-2px)'; btn.style.boxShadow = '0 6px 16px rgba(0,0,0,0.2)'; };
+    btn.onmouseout = () => { btn.style.transform = 'none'; btn.style.boxShadow = '0 4px 12px rgba(0,0,0,0.15)'; };
+</script>
+</body>
+</html>

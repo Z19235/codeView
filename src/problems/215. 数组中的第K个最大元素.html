@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LeetCode 215: Kth Largest (Heap) 可视化</title>
+    <style>
+        :root {
+            --bg-color: #f8f9fa;
+            --node-size: 50px;
+            --primary-color: #1890ff; /* Blue */
+            --compare-color: #faad14; /* Orange */
+            --swap-color: #ff4d4f;    /* Red */
+            --sorted-color: #52c41a;  /* Green */
+            --inactive-color: #d9d9d9;
+        }
+        body { font-family: 'Segoe UI', sans-serif; background: var(--bg-color); display: flex; flex-direction: column; align-items: center; padding: 20px; margin: 0; }
+
+        /* Layout */
+        .container { display: flex; flex-direction: column; align-items: center; gap: 20px; width: 100%; max-width: 1000px; }
+        .canvas-box { position: relative; width: 800px; height: 350px; background: white; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); border: 1px solid #e8e8e8; }
+        .array-box { display: flex; gap: 5px; margin-top: 10px; padding: 10px; background: white; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+
+        /* Nodes (Tree) */
+        .node {
+            position: absolute; width: var(--node-size); height: var(--node-size);
+            border-radius: 50%; border: 3px solid #333; background: white;
+            display: flex; align-items: center; justify-content: center;
+            font-weight: bold; font-size: 18px; z-index: 2;
+            transition: all 0.3s;
+        }
+        .node.outside-heap { background: var(--inactive-color); border-color: #999; color: #666; }
+        .node.kth-found { background: var(--sorted-color); color: white; border-color: var(--sorted-color); box-shadow: 0 0 15px var(--sorted-color); }
+        .node.comparing { border-color: var(--compare-color); background: #fffbe6; }
+        .node.swapping { border-color: var(--swap-color); background: #fff1f0; transform: scale(1.1); }
+
+        /* Array Elements */
+        .arr-idx { width: 40px; height: 40px; border: 2px solid #ccc; display: flex; flex-direction: column; align-items: center; justify-content: center; font-weight: bold; border-radius: 4px; position: relative; transition: all 0.3s; }
+        .arr-idx span { font-size: 10px; color: #888; margin-top: -20px; position: absolute; top: 0; }
+        .arr-idx.active-range { border-color: #333; background: white; }
+        .arr-idx.outside-range { background: var(--inactive-color); border-color: #ddd; color: #888; }
+
+        /* SVG Lines */
+        svg { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; pointer-events: none; }
+        line { stroke: #999; stroke-width: 2; transition: stroke 0.3s; }
+
+        /* Pointers/Labels */
+        .pointer {
+            position: absolute; padding: 2px 6px; border-radius: 4px; color: white; font-size: 12px; font-weight: bold; z-index: 10;
+            transition: all 0.3s; pointer-events: none; white-space: nowrap;
+        }
+        .ptr-i { background: #1890ff; top: -25px; left: 50%; transform: translateX(-50%); }
+        .ptr-l { background: #722ed1; bottom: -25px; left: -10px; }
+        .ptr-r { background: #eb2f96; bottom: -25px; right: -10px; }
+        .ptr-largest { background: #faad14; top: -25px; right: -40px; border: 1px solid #333; color: #333; }
+
+        /* Controls */
+        .controls { display: flex; gap: 10px; align-items: center; }
+        button { padding: 8px 16px; cursor: pointer; background: var(--primary-color); color: white; border: none; border-radius: 4px; font-size: 16px; }
+        button:disabled { background: #ccc; cursor: not-allowed; }
+        button.secondary { background: #fff; border: 1px solid var(--primary-color); color: var(--primary-color); }
+
+        /* Explanation */
+        .info-panel { width: 800px; background: #e6f7ff; border: 1px solid #91d5ff; padding: 15px; border-radius: 8px; }
+        .code { font-family: monospace; font-weight: bold; color: #003a8c; margin-bottom: 5px; display: block; }
+        .desc { color: #555; }
+
+        .legend { display: flex; gap: 15px; font-size: 12px; margin-top: 5px; }
+        .legend-item { display: flex; align-items: center; gap: 5px; }
+        .dot { width: 12px; height: 12px; border-radius: 50%; border: 2px solid #333; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>Find Kth Largest (K=2) - Max Heap Method</h2>
+
+    <div class="legend">
+        <div class="legend-item"><div class="dot" style="background:white"></div> 堆中节点</div>
+        <div class="legend-item"><div class="dot" style="background:var(--inactive-color)"></div> 已移除/堆外</div>
+        <div class="legend-item"><div class="dot" style="background:#fffbe6; border-color:var(--compare-color)"></div> 比较中</div>
+        <div class="legend-item"><div class="dot" style="background:#fff1f0; border-color:var(--swap-color)"></div> 交换</div>
+        <div class="legend-item"><div class="dot" style="background:var(--sorted-color); border-color:var(--sorted-color)"></div> 结果 (Kth)</div>
+    </div>
+
+    <div class="canvas-box" id="tree-container">
+        <svg id="svg-lines"></svg>
+    </div>
+
+    <div class="array-box" id="array-container">
+    </div>
+
+    <div class="info-panel">
+        <span class="code" id="step-code">// 算法准备开始</span>
+        <span class="desc" id="step-desc">初始数组: [3, 2, 3, 1, 2, 4, 5, 5, 6], K=2</span>
+    </div>
+
+    <div class="controls">
+        <button onclick="reset()" class="secondary">重置 (Reset)</button>
+        <button onclick="prevStep()" id="btn-prev" disabled>上一步</button>
+        <button onclick="nextStep()" id="btn-next">下一步</button>
+    </div>
+</div>
+
+<script>
+    // ================= CONFIGURATION =================
+    // 示例数据：LeetCode 215 Example 2 的简化版，或者是 Example 1
+    // 使用: [3, 2, 1, 5, 6, 4], K = 2. 目标结果是 5.
+    const INITIAL_NUMS = [3, 2, 1, 5, 6, 4];
+    const K_TARGET = 2;
+
+    // 树布局坐标 (hardcoded for 6-7 nodes for simplicity)
+    const POSITIONS = [
+        { x: 400, y: 50 },  // 0
+        { x: 200, y: 150 }, // 1
+        { x: 600, y: 150 }, // 2
+        { x: 100, y: 250 }, // 3
+        { x: 300, y: 250 }, // 4
+        { x: 500, y: 250 }  // 5
+    ];
+
+    // ================= ALGORITHM SIMULATION =================
+    // 我们不是实时运行算法，而是先在内存中运行一遍，记录下每一步的状态(Snapshot)
+    let steps = [];
+
+    function generateSteps() {
+        steps = [];
+        let nums = [...INITIAL_NUMS];
+        let n = nums.length;
+
+        recordState(nums, n, null, "算法开始: 初始化 n = " + n, "init");
+
+        // 1. Build Max Heap
+        for (let i = Math.floor(n / 2) - 1; i >= 0; i--) {
+            recordState(nums, n, { i }, `buildMaxHeap: 对节点 i=${i} 进行 heapify`, "build");
+            maxHeapifySim(nums, n, i);
+        }
+
+        recordState(nums, n, null, "大顶堆构建完成。堆顶是当前最大值。", "built");
+
+        // 2. Extract K-1 times
+        // 注意：原代码逻辑是 i >= nums.length - k + 1
+        // 比如 length=6, k=2. 循环 i 从 5 到 6-2+1=5. 只执行一次交换。
+        // 交换后 n--, 然后 heapify.
+        // 最后 nums[0] 就是第 K 大。
+
+        for (let i = nums.length - 1; i >= nums.length - K_TARGET + 1; i--) {
+            recordState(nums, n, { swapA: 0, swapB: i }, `提取最大值: 交换堆顶(0)与末尾(${i})`, "swap-root");
+
+            // Swap
+            let temp = nums[0];
+            nums[0] = nums[i];
+            nums[i] = temp;
+
+            n--; // Reduce heap size
+            recordState(nums, n, null, `堆大小减小 n=${n}。节点 ${i} 已就位(第${nums.length-i}大)。`, "shrink");
+
+            recordState(nums, n, { i: 0 }, `maxHeapfy: 修复堆顶 i=0`, "fix");
+            maxHeapifySim(nums, n, 0);
+        }
+
+        recordState(nums, n, { result: 0 }, `循环结束。堆顶 nums[0] 即为第 ${K_TARGET} 大元素。`, "finish");
+    }
+
+    function maxHeapifySim(a, n, i) {
+        let l = i * 2 + 1;
+        let r = i * 2 + 2;
+        let largest = i;
+
+        // Visual: highlighting comparison
+        let pointers = { i, l: (l<n?l:null), r: (r<n?r:null), largest };
+        recordState(a, n, pointers, `maxHeapfy: 比较 i=${i} 与子节点`, "compare");
+
+        if (l < n && a[l] > a[largest]) {
+            largest = l;
+            recordState(a, n, { ...pointers, largest }, `左孩子更大，更新 largest=${l}`, "compare");
+        }
+        if (r < n && a[r] > a[largest]) {
+            largest = r;
+            recordState(a, n, { ...pointers, largest }, `右孩子更大，更新 largest=${r}`, "compare");
+        }
+
+        if (largest !== i) {
+            recordState(a, n, { swapA: i, swapB: largest, i, largest }, `执行交换: i=${i} <-> largest=${largest}`, "swap");
+
+            let temp = a[i];
+            a[i] = a[largest];
+            a[largest] = temp;
+
+            // Post swap state
+            recordState(a, n, { i, largest }, `交换完成，递归处理子树 ${largest}`, "post-swap");
+
+            maxHeapifySim(a, n, largest);
+        }
+    }
+
+    function recordState(currentNums, heapSize, pointers, desc, type) {
+        steps.push({
+            nums: [...currentNums], // Copy array
+            n: heapSize,
+            pointers: pointers || {},
+            desc: desc,
+            type: type
+        });
+    }
+
+    // ================= RENDERING =================
+    let currentStepIndex = 0;
+
+    function render(stepIndex) {
+        const step = steps[stepIndex];
+        const { nums, n, pointers, desc, type } = step;
+
+        // Update Text
+        document.getElementById('step-desc').innerText = desc;
+        let codeText = "";
+        if(type === 'compare') codeText = "if (l < n && a[l] > a[largest]) ...";
+        else if(type === 'swap') codeText = "swap(a, i, largest);";
+        else if(type === 'swap-root') codeText = "swap(nums, 0, i); n--;";
+        else if(type === 'finish') codeText = "return nums[0];";
+        else codeText = "Processing...";
+        document.getElementById('step-code').innerText = codeText;
+
+        // Render Array
+        const arrContainer = document.getElementById('array-container');
+        arrContainer.innerHTML = '';
+        nums.forEach((val, idx) => {
+            const div = document.createElement('div');
+            div.className = `arr-idx ${idx < n ? 'active-range' : 'outside-range'}`;
+            div.innerHTML = `<span>${idx}</span>${val}`;
+            if (pointers.i === idx) div.style.borderColor = '#1890ff';
+            if (pointers.swapA === idx || pointers.swapB === idx) div.style.backgroundColor = '#fff1f0';
+            arrContainer.appendChild(div);
+        });
+
+        // Render Tree Nodes
+        const treeContainer = document.getElementById('tree-container');
+        // Clear previous nodes but keep SVG
+        const oldNodes = document.querySelectorAll('.node, .pointer');
+        oldNodes.forEach(el => el.remove());
+
+        const svg = document.getElementById('svg-lines');
+        svg.innerHTML = ''; // Clear lines
+
+        // Draw Nodes
+        nums.forEach((val, idx) => {
+            if (idx >= POSITIONS.length) return; // Limit visualization to defined positions
+
+            const pos = POSITIONS[idx];
+            const isOutsideHeap = idx >= n;
+
+            // Create Node
+            const el = document.createElement('div');
+            el.className = 'node';
+            el.innerText = val;
+            el.style.left = (pos.x - 25) + 'px';
+            el.style.top = (pos.y - 25) + 'px';
+
+            // Styles based on state
+            if (isOutsideHeap) el.classList.add('outside-heap');
+
+            // Special Highlights
+            if (type === 'compare') {
+                if ([pointers.i, pointers.l, pointers.r].includes(idx)) el.classList.add('comparing');
+            }
+            if (pointers.swapA === idx || pointers.swapB === idx) {
+                el.classList.add('swapping');
+            }
+            if (type === 'finish' && idx === 0) {
+                el.classList.add('kth-found');
+            }
+
+            treeContainer.appendChild(el);
+
+            // Draw Lines (Parent to Child)
+            const leftChildIdx = 2 * idx + 1;
+            const rightChildIdx = 2 * idx + 2;
+
+            [leftChildIdx, rightChildIdx].forEach(childIdx => {
+                if (childIdx < nums.length && POSITIONS[childIdx]) {
+                    const childPos = POSITIONS[childIdx];
+                    const line = document.createElementNS("http://www.w3.org/2000/svg", 'line');
+                    line.setAttribute('x1', pos.x);
+                    line.setAttribute('y1', pos.y + 25);
+                    line.setAttribute('x2', childPos.x);
+                    line.setAttribute('y2', childPos.y - 25);
+                    if (childIdx >= n) line.setAttribute('stroke', '#e8e8e8'); // Faint line for removed nodes
+                    svg.appendChild(line);
+                }
+            });
+
+            // Draw Pointers (Labels) attached to nodes
+            addPointerLabel(idx, pointers, pos, treeContainer);
+        });
+
+        // Button States
+        document.getElementById('btn-prev').disabled = stepIndex === 0;
+        document.getElementById('btn-next').disabled = stepIndex === steps.length - 1;
+        if(stepIndex === steps.length - 1) document.getElementById('btn-next').innerText = "完成";
+        else document.getElementById('btn-next').innerText = "下一步";
+    }
+
+    function addPointerLabel(idx, pointers, pos, container) {
+        // Create labels map
+        const labels = [];
+        if (pointers.i === idx) labels.push({ text: 'i', cls: 'ptr-i' });
+        if (pointers.l === idx) labels.push({ text: 'L', cls: 'ptr-l' });
+        if (pointers.r === idx) labels.push({ text: 'R', cls: 'ptr-r' });
+        if (pointers.largest === idx) labels.push({ text: 'Largest', cls: 'ptr-largest' });
+
+        labels.forEach(lbl => {
+            const div = document.createElement('div');
+            div.className = `pointer ${lbl.cls}`;
+            div.innerText = lbl.text;
+            div.style.left = (pos.x - 10) + 'px'; // Base positioning handled by CSS classes relative to this
+            div.style.top = (pos.y) + 'px';
+
+            // Adjust specific offsets based on class in CSS, but here we inject the DOM
+            // We need to append to container, but position relative to the node coordinates
+            // To simplify, let's just use the pos.x/y and css transforms
+
+            container.appendChild(div);
+        });
+    }
+
+    // ================= CONTROLS =================
+    function nextStep() {
+        if (currentStepIndex < steps.length - 1) {
+            currentStepIndex++;
+            render(currentStepIndex);
+        }
+    }
+
+    function prevStep() {
+        if (currentStepIndex > 0) {
+            currentStepIndex--;
+            render(currentStepIndex);
+        }
+    }
+
+    function reset() {
+        generateSteps();
+        currentStepIndex = 0;
+        render(0);
+    }
+
+    // Init
+    reset();
+
+</script>
+</body>
+</html>

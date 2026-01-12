@@ -1,0 +1,573 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>螺旋矩阵算法可视化 (Spiral Matrix)</title>
+    <style>
+        :root {
+            --cell-size: 60px;
+            --gap: 10px;
+            --primary: #3b82f6;
+            --visited: #d1d5db;
+            --current: #22c55e;
+            --border-color: #ef4444;
+        }
+
+        body {
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            background: #f8fafc;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+            height: 100vh;
+            margin: 0;
+        }
+
+        h1 { color: #1e293b; margin-bottom: 20px; }
+
+        .main-container {
+            display: flex;
+            gap: 40px;
+            align-items: flex-start;
+        }
+
+        /* 左侧：可视化区域 */
+        .viz-section {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 20px;
+        }
+
+        .matrix-wrapper {
+            position: relative;
+            padding: 40px; /* 给边界指针留空间 */
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);
+        }
+
+        .grid {
+            display: grid;
+            gap: var(--gap);
+            /* grid-template-columns 会在JS中设置 */
+        }
+
+        .cell {
+            width: var(--cell-size);
+            height: var(--cell-size);
+            background: #f1f5f9;
+            border: 2px solid #cbd5e1;
+            border-radius: 8px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 1.2rem;
+            font-weight: bold;
+            color: #475569;
+            transition: all 0.3s ease;
+            position: relative;
+            z-index: 1;
+        }
+
+        .cell.visited {
+            background-color: var(--visited);
+            color: #9ca3af;
+            border-color: #9ca3af;
+        }
+
+        .cell.active {
+            background-color: var(--current);
+            color: white;
+            border-color: #15803d;
+            transform: scale(1.1);
+            z-index: 10;
+            box-shadow: 0 4px 12px rgba(34, 197, 94, 0.4);
+        }
+
+        /* 边界线/指针样式 */
+        .boundary-line {
+            position: absolute;
+            background-color: var(--border-color);
+            transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+            z-index: 5;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .boundary-label {
+            background: var(--border-color);
+            color: white;
+            font-size: 12px;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-weight: bold;
+            white-space: nowrap;
+            position: absolute;
+        }
+
+        /* 上边界 T */
+        #line-t { height: 2px; width: 0; left: 40px; }
+        #line-t .boundary-label { bottom: 5px; left: 50%; transform: translateX(-50%); }
+
+        /* 下边界 B */
+        #line-b { height: 2px; width: 0; left: 40px; }
+        #line-b .boundary-label { top: 5px; left: 50%; transform: translateX(-50%); }
+
+        /* 左边界 L */
+        #line-l { width: 2px; height: 0; top: 40px; }
+        #line-l .boundary-label { right: 5px; top: 50%; transform: translateY(-50%); }
+
+        /* 右边界 R */
+        #line-r { width: 2px; height: 0; top: 40px; }
+        #line-r .boundary-label { left: 5px; top: 50%; transform: translateY(-50%); }
+
+
+        /* 右侧：代码与控制 */
+        .control-panel {
+            width: 400px;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .info-box {
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        }
+
+        .status-text {
+            font-size: 16px;
+            color: #334155;
+            margin-bottom: 5px;
+            min-height: 48px;
+        }
+
+        .result-array {
+            font-family: monospace;
+            color: #0f172a;
+            word-break: break-all;
+            background: #f1f5f9;
+            padding: 8px;
+            border-radius: 4px;
+            margin-top: 5px;
+        }
+
+        .controls {
+            display: flex;
+            gap: 10px;
+        }
+
+        button {
+            flex: 1;
+            padding: 10px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: background 0.2s;
+        }
+
+        .btn-prev { background: #e2e8f0; color: #475569; }
+        .btn-next { background: var(--primary); color: white; }
+        .btn-reset { background: #fca5a5; color: #7f1d1d; }
+        .btn-next:hover { background: #2563eb; }
+
+        /* 代码高亮区域 */
+        .code-container {
+            background: #1e1e1e;
+            color: #d4d4d4;
+            padding: 15px;
+            border-radius: 8px;
+            font-family: 'Consolas', monospace;
+            font-size: 13px;
+            overflow-x: auto;
+            line-height: 1.5;
+        }
+
+        .code-line {
+            padding: 0 4px;
+            border-left: 3px solid transparent;
+        }
+        .code-line.active-line {
+            background-color: #374151;
+            border-left-color: var(--current);
+            color: white;
+        }
+
+        .var-badge {
+            display: inline-block;
+            padding: 2px 6px;
+            border-radius: 4px;
+            color: white;
+            font-weight: bold;
+            font-size: 12px;
+            margin-right: 5px;
+        }
+        .bg-t { background: #ef4444; } /* Red */
+        .bg-b { background: #ef4444; }
+        .bg-l { background: #ef4444; }
+        .bg-r { background: #ef4444; }
+
+    </style>
+</head>
+<body>
+<div id="global-back-btn" style="position: fixed; top: 15px; left: 15px; z-index: 9999; cursor: pointer; background: white; padding: 8px 12px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); display: flex; align-items: center; gap: 6px; font-family: 'Segoe UI', sans-serif; border: 1px solid #e2e8f0; transition: all 0.2s; user-select: none;">
+    <span style="font-size: 16px;">🔙</span>
+    <span style="font-weight: 600; font-size: 14px; color: #334155;">返回目录</span>
+</div>
+<h1>螺旋矩阵算法可视化 (Spiral Array)</h1>
+
+<div class="main-container">
+    <div class="viz-section">
+        <div class="matrix-wrapper">
+            <div id="grid" class="grid"></div>
+
+            <div id="line-t" class="boundary-line"><span class="boundary-label">t (Top)</span></div>
+            <div id="line-b" class="boundary-line"><span class="boundary-label">b (Bottom)</span></div>
+            <div id="line-l" class="boundary-line"><span class="boundary-label">l (Left)</span></div>
+            <div id="line-r" class="boundary-line"><span class="boundary-label">r (Right)</span></div>
+        </div>
+    </div>
+
+    <div class="control-panel">
+        <div class="info-box">
+            <div id="status" class="status-text">准备就绪...</div>
+            <div>
+                <strong>当前边界:</strong>
+                l: <span id="val-l">0</span>, r: <span id="val-r">0</span>,
+                t: <span id="val-t">0</span>, b: <span id="val-b">0</span>
+            </div>
+            <div style="margin-top:10px;"><strong>结果 (res):</strong></div>
+            <div id="res-array" class="result-array">[]</div>
+        </div>
+
+        <div class="controls">
+            <button class="btn-prev" onclick="prevStep()">上一步</button>
+            <button class="btn-next" onclick="nextStep()">下一步</button>
+            <button class="btn-reset" onclick="reset()">重置</button>
+        </div>
+
+        <div class="code-container" id="code-box">
+        </div>
+    </div>
+</div>
+
+<script>
+    // ================= 配置与数据 =================
+    const MATRIX = [
+        [1, 2, 3, 4],
+        [5, 6, 7, 8],
+        [9, 10, 11, 12],
+        [13, 14, 15, 16]
+    ];
+    // 你可以修改上面的矩阵大小来测试不同情况，比如 3x3 或 3x4
+
+    const ROWS = MATRIX.length;
+    const COLS = MATRIX[0].length;
+
+    // 对应 Java 代码行 (用于高亮)
+    const JAVA_CODE = [
+        "public int[] spiralArray(int[][] matrix) {",
+        "    if(matrix.length==0) return new int[0];",
+        "    int l = 0, r = matrix[0].length-1, t = 0, b = matrix.length-1;",
+        "    int[] res = new int[(r+1)*(b+1)]; int x = 0;",
+        "    while(true){",
+        "        for(int i = l; i <= r; i++) res[x++] = matrix[t][i];", // 5: Top -> Right
+        "        if(++t > b) break;",                                     // 6: t move
+        "        for(int j = t; j <= b; j++) res[x++] = matrix[j][r];", // 7: Right -> Bottom
+        "        if(l > --r) break;",                                     // 8: r move
+        "        for(int i = r; i >= l; i--) res[x++] = matrix[b][i];", // 9: Bottom -> Left
+        "        if(--b < t) break;",                                     // 10: b move
+        "        for(int j = b; j >= t; j--) res[x++] = matrix[j][l];", // 11: Left -> Top
+        "        if(++l > r) break;",                                     // 12: l move
+        "    }",
+        "    return res;",
+        "}"
+    ];
+
+    // ================= 状态管理 =================
+    let steps = [];
+    let currentStepIndex = -1;
+
+    // ================= 初始化 DOM =================
+    function init() {
+        // 1. 生成网格
+        const grid = document.getElementById('grid');
+        grid.style.gridTemplateColumns = `repeat(${COLS}, var(--cell-size))`;
+
+        grid.innerHTML = '';
+        for(let i=0; i<ROWS; i++) {
+            for(let j=0; j<COLS; j++) {
+                const cell = document.createElement('div');
+                cell.className = 'cell';
+                cell.id = `cell-${i}-${j}`;
+                cell.textContent = MATRIX[i][j];
+                grid.appendChild(cell);
+            }
+        }
+
+        // 2. 生成代码显示
+        const codeBox = document.getElementById('code-box');
+        codeBox.innerHTML = JAVA_CODE.map((line, idx) =>
+            `<div class="code-line" id="line-${idx}">${line.replace(/</g, '&lt;')}</div>`
+        ).join('');
+
+        // 3. 计算所有步骤
+        generateSteps();
+
+        // 4. 渲染初始状态
+        updateVisuals();
+    }
+
+    // ================= 核心逻辑：生成步骤快照 =================
+    function generateSteps() {
+        steps = [];
+        // 初始状态
+        let l = 0, r = COLS - 1, t = 0, b = ROWS - 1;
+        let res = [];
+
+        // 记录初始快照
+        recordStep(l, r, t, b, [], null, -1, "算法开始，初始化边界指针");
+        recordStep(l, r, t, b, [], null, 2, `l=${l}, r=${r}, t=${t}, b=${b}`);
+
+        while(true) {
+            // 1. Left to Right
+            for(let i = l; i <= r; i++) {
+                res.push(MATRIX[t][i]);
+                recordStep(l, r, t, b, [...res], [t, i], 5, `向右遍历: matrix[${t}][${i}] 加入结果`);
+            }
+            // t++
+            t++;
+            recordStep(l, r, t, b, [...res], null, 6, `上边界 t 下移，现在 t=${t}`);
+            if(t > b) break;
+
+            // 2. Top to Bottom
+            for(let j = t; j <= b; j++) {
+                res.push(MATRIX[j][r]);
+                recordStep(l, r, t, b, [...res], [j, r], 7, `向下遍历: matrix[${j}][${r}] 加入结果`);
+            }
+            // r--
+            r--;
+            recordStep(l, r, t, b, [...res], null, 8, `右边界 r 左移，现在 r=${r}`);
+            if(l > r) break;
+
+            // 3. Right to Left
+            for(let i = r; i >= l; i--) {
+                res.push(MATRIX[b][i]);
+                recordStep(l, r, t, b, [...res], [b, i], 9, `向左遍历: matrix[${b}][${i}] 加入结果`);
+            }
+            // b--
+            b--;
+            recordStep(l, r, t, b, [...res], null, 10, `下边界 b 上移，现在 b=${b}`);
+            if(b < t) break;
+
+            // 4. Bottom to Top
+            for(let j = b; j >= t; j--) {
+                res.push(MATRIX[j][l]);
+                recordStep(l, r, t, b, [...res], [j, l], 11, `向上遍历: matrix[${j}][${l}] 加入结果`);
+            }
+            // l++
+            l++;
+            recordStep(l, r, t, b, [...res], null, 12, `左边界 l 右移，现在 l=${l}`);
+            if(l > r) break;
+        }
+
+        recordStep(l, r, t, b, [...res], null, 14, "遍历结束，返回结果");
+    }
+
+    function recordStep(l, r, t, b, res, activeCell, lineNum, msg) {
+        steps.push({
+            l, r, t, b,
+            res,
+            activeCell, // [row, col] or null
+            lineNum,
+            msg
+        });
+    }
+
+    // ================= 渲染逻辑 =================
+    function updateVisuals() {
+        if(currentStepIndex < 0) {
+            resetVisuals();
+            return;
+        }
+
+        const s = steps[currentStepIndex];
+
+        // 1. 更新文本信息
+        document.getElementById('status').textContent = s.msg;
+        document.getElementById('val-l').textContent = s.l;
+        document.getElementById('val-r').textContent = s.r;
+        document.getElementById('val-t').textContent = s.t;
+        document.getElementById('val-b').textContent = s.b;
+        document.getElementById('res-array').textContent = '[' + s.res.join(', ') + ']';
+
+        // 2. 代码高亮
+        document.querySelectorAll('.code-line').forEach(el => el.classList.remove('active-line'));
+        if(s.lineNum >= 0) {
+            const line = document.getElementById(`line-${s.lineNum}`);
+            if(line) {
+                line.classList.add('active-line');
+                // 自动滚动到中间
+                line.scrollIntoView({block: 'center', behavior: 'smooth'});
+            }
+        }
+
+        // 3. 单元格样式
+        // 重置所有 Active，保留 Visited
+        document.querySelectorAll('.cell').forEach(c => c.classList.remove('active'));
+
+        // 标记已访问 (根据当前结果集的内容，反推已访问的格子，简单粗暴但有效)
+        // 更精确的做法：根据 activeCell 累加。为了简单，我们重新遍历一下 steps[0] 到 steps[current] 的 activeCell
+        for(let i=0; i<=currentStepIndex; i++) {
+            const step = steps[i];
+            if(step.activeCell) {
+                const cell = document.getElementById(`cell-${step.activeCell[0]}-${step.activeCell[1]}`);
+                if(cell) cell.classList.add('visited');
+            }
+        }
+
+        // 高亮当前格
+        if(s.activeCell) {
+            const cell = document.getElementById(`cell-${s.activeCell[0]}-${s.activeCell[1]}`);
+            if(cell) {
+                cell.classList.remove('visited'); // 当前格不高亮 visited 颜色
+                cell.classList.add('active');
+            }
+        }
+
+        // 4. 更新红线位置 (Visual Walls)
+        updateBoundaries(s.l, s.r, s.t, s.b);
+    }
+
+    function updateBoundaries(l, r, t, b) {
+        // 计算像素位置
+        // 40px padding + (index * (60 + 10))
+        const cellSize = 60;
+        const gap = 10;
+        const padding = 40;
+        const totalWidth = COLS * (cellSize + gap) - gap;
+        const totalHeight = ROWS * (cellSize + gap) - gap;
+
+        const getPos = (idx) => padding + idx * (cellSize + gap);
+
+        const lineT = document.getElementById('line-t');
+        const lineB = document.getElementById('line-b');
+        const lineL = document.getElementById('line-l');
+        const lineR = document.getElementById('line-r');
+
+        // Top Line (水平线，位于 t 行上方)
+        // 为了视觉效果，我们把它放在 t 行的“上边缘”稍微上面一点，或者正切着 t 行
+        // 这里的逻辑是：t 代表"包含t"，所以线应该在 t-1 和 t 之间。
+        // 为了简单，我们让线直接定位在 t 行的顶部 Y 轴位置
+        let topY = getPos(t) - 5;
+        lineT.style.top = `${topY}px`;
+        lineT.style.width = `${totalWidth}px`;
+
+        // Bottom Line (水平线，位于 b 行下方)
+        // 位于 b 行底部
+        let bottomY = getPos(b) + cellSize + 5;
+        lineB.style.top = `${bottomY}px`;
+        lineB.style.width = `${totalWidth}px`;
+
+        // Left Line (垂直线，位于 l 列左侧)
+        let leftX = getPos(l) - 5;
+        lineL.style.left = `${leftX}px`;
+        lineL.style.height = `${totalHeight}px`;
+
+        // Right Line (垂直线，位于 r 列右侧)
+        let rightX = getPos(r) + cellSize + 5;
+        lineR.style.left = `${rightX}px`;
+        lineR.style.height = `${totalHeight}px`;
+
+        // 特殊处理：如果 t > b 或 l > r，让线交叉表示结束
+        if(t > b) {
+            lineT.style.opacity = '0.3';
+            lineB.style.opacity = '0.3';
+        } else {
+            lineT.style.opacity = '1';
+            lineB.style.opacity = '1';
+        }
+        if(l > r) {
+            lineL.style.opacity = '0.3';
+            lineR.style.opacity = '0.3';
+        } else {
+            lineL.style.opacity = '1';
+            lineR.style.opacity = '1';
+        }
+    }
+
+    function resetVisuals() {
+        document.querySelectorAll('.cell').forEach(c => {
+            c.classList.remove('active', 'visited');
+        });
+        document.getElementById('status').textContent = "准备开始";
+        document.getElementById('res-array').textContent = "[]";
+        document.getElementById('val-l').textContent = 0;
+        document.getElementById('val-r').textContent = COLS-1;
+        document.getElementById('val-t').textContent = 0;
+        document.getElementById('val-b').textContent = ROWS-1;
+        document.querySelectorAll('.code-line').forEach(el => el.classList.remove('active-line'));
+        updateBoundaries(0, COLS-1, 0, ROWS-1);
+    }
+
+    // ================= 按钮控制 =================
+    function nextStep() {
+        if(currentStepIndex < steps.length - 1) {
+            currentStepIndex++;
+            updateVisuals();
+        }
+    }
+
+    function prevStep() {
+        if(currentStepIndex > 0) {
+            // 需要完全重绘来清除 visited 状态
+            // 简单方法：重置所有 visited，然后重新根据历史 activeCell 添加
+            const targetIdx = currentStepIndex - 1;
+            document.querySelectorAll('.cell').forEach(c => c.classList.remove('visited', 'active'));
+            currentStepIndex = targetIdx;
+            updateVisuals();
+        } else if (currentStepIndex === 0) {
+            currentStepIndex = -1;
+            resetVisuals();
+        }
+    }
+
+    function reset() {
+        currentStepIndex = -1;
+        resetVisuals();
+    }
+
+    // 启动
+    window.onload = init;
+    document.getElementById('global-back-btn').addEventListener('click', () => {
+        // 逻辑：如果是被父窗口打开的（Blob URL模式），则关闭自己
+        if (window.opener) {
+            window.close();
+        }
+        // 逻辑：如果是直接打开文件的，则尝试回退或跳转
+        else {
+            if (document.referrer) {
+                window.history.back();
+            } else {
+                // 如果没有历史记录（直接双击打开），尝试跳转到同级目录下的 index.html
+                window.location.href = './index.html'; // 假设 index.html 在同级
+                // 或者尝试跳到上一级
+                // window.location.href = '../index.html';
+            }
+        }
+    });
+
+    // 鼠标悬停效果
+    const btn = document.getElementById('global-back-btn');
+    btn.onmouseover = () => { btn.style.transform = 'translateY(-2px)'; btn.style.boxShadow = '0 6px 16px rgba(0,0,0,0.2)'; };
+    btn.onmouseout = () => { btn.style.transform = 'none'; btn.style.boxShadow = '0 4px 12px rgba(0,0,0,0.15)'; };
+</script>
+</body>
+</html>

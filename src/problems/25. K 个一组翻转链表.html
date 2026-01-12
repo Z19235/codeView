@@ -117,7 +117,10 @@
     </style>
 </head>
 <body>
-
+<div id="global-back-btn" style="position: fixed; top: 15px; left: 15px; z-index: 9999; cursor: pointer; background: white; padding: 8px 12px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); display: flex; align-items: center; gap: 6px; font-family: 'Segoe UI', sans-serif; border: 1px solid #e2e8f0; transition: all 0.2s; user-select: none;">
+    <span style="font-size: 16px;">🔙</span>
+    <span style="font-weight: 600; font-size: 14px; color: #334155;">返回目录</span>
+</div>
 <h2>K个一组翻转链表 (Demo: 节点 1-8, K=3)</h2>
 
 <div id="canvas-container">
@@ -518,6 +521,28 @@
     // 启动
     resetDemo();
 
+    document.getElementById('global-back-btn').addEventListener('click', () => {
+        // 逻辑：如果是被父窗口打开的（Blob URL模式），则关闭自己
+        if (window.opener) {
+            window.close();
+        }
+        // 逻辑：如果是直接打开文件的，则尝试回退或跳转
+        else {
+            if (document.referrer) {
+                window.history.back();
+            } else {
+                // 如果没有历史记录（直接双击打开），尝试跳转到同级目录下的 index.html
+                window.location.href = './index.html'; // 假设 index.html 在同级
+                // 或者尝试跳到上一级
+                // window.location.href = '../index.html';
+            }
+        }
+    });
+
+    // 鼠标悬停效果
+    const btn = document.getElementById('global-back-btn');
+    btn.onmouseover = () => { btn.style.transform = 'translateY(-2px)'; btn.style.boxShadow = '0 6px 16px rgba(0,0,0,0.2)'; };
+    btn.onmouseout = () => { btn.style.transform = 'none'; btn.style.boxShadow = '0 4px 12px rgba(0,0,0,0.15)'; };
 </script>
 </body>
 </html>

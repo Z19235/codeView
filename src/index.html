@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>算法可视化工作台</title>
+    <style>
+        :root {
+            --primary: #3b82f6;
+            --bg: #f1f5f9;
+            --card-bg: #ffffff;
+            --text-main: #1e293b;
+            --text-sub: #64748b;
+        }
+
+        body {
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            background-color: var(--bg);
+            color: var(--text-main);
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+        }
+
+        header { text-align: center; margin-bottom: 30px; }
+        h1 { font-size: 2rem; margin-bottom: 5px; color: #1e293b; }
+        p.subtitle { color: var(--text-sub); margin-top: 0; }
+
+        .action-bar {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 30px;
+            background: white;
+            padding: 15px 25px;
+            border-radius: 12px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            align-items: center;
+        }
+
+        .status-indicator {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.9rem;
+            color: var(--text-sub);
+            margin-right: 15px;
+            padding-right: 15px;
+            border-right: 1px solid #e2e8f0;
+        }
+        .dot { width: 10px; height: 10px; border-radius: 50%; background: #cbd5e1; }
+        .dot.active { background: #10b981; box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.2); }
+
+        button {
+            padding: 10px 20px;
+            border-radius: 8px;
+            border: none;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.95rem;
+        }
+
+        .btn-connect { background-color: #0f172a; color: white; }
+        .btn-connect:hover { background-color: #334155; }
+        .btn-primary { background-color: var(--primary); color: white; }
+        .btn-primary:hover { background-color: #2563eb; }
+        .btn-primary:disabled { background-color: #94a3b8; cursor: not-allowed; }
+
+        .grid-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 20px;
+            width: 100%;
+            max-width: 1200px;
+        }
+
+        .card {
+            background: var(--card-bg);
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            border: 1px solid #e2e8f0;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+            display: flex;
+            flex-direction: column;
+            height: 140px;
+        }
+        .card:hover { transform: translateY(-4px); box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1); border-color: var(--primary); }
+        .card h3 { margin: 0 0 10px 0; font-size: 1.1rem; line-height: 1.4; flex: 1;}
+        .card-meta { font-size: 0.8rem; color: #94a3b8; display: flex; justify-content: space-between; align-items: center; }
+        .tag { background: #e0f2fe; color: #0369a1; padding: 2px 8px; border-radius: 4px; font-weight: bold; font-size: 0.75rem;}
+        .empty-state { grid-column: 1 / -1; text-align: center; color: #94a3b8; padding: 60px; background: white; border-radius: 12px; border: 2px dashed #e2e8f0; }
+
+        .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 100; display: none; justify-content: center; align-items: center; }
+        .modal-overlay.open { display: flex; }
+        .modal-content { background: white; width: 90%; max-width: 800px; height: 85vh; border-radius: 12px; display: flex; flex-direction: column; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1); }
+        .modal-header { padding: 15px 20px; border-bottom: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center; }
+        .modal-body { flex: 1; padding: 20px; display: flex; flex-direction: column; gap: 15px; overflow: hidden; }
+        .input-group { display: flex; flex-direction: column; gap: 5px; }
+        .input-group label { font-size: 0.9rem; font-weight: bold; color: #475569; }
+        .input-group input { padding: 8px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 1rem; }
+        .editor-area { flex: 1; resize: none; border: 1px solid #cbd5e1; border-radius: 6px; padding: 15px; font-family: 'Consolas', monospace; font-size: 14px; background: #1e1e1e; color: #d4d4d4; line-height: 1.5; }
+        .modal-footer { padding: 15px 20px; border-top: 1px solid #e2e8f0; display: flex; justify-content: flex-end; gap: 10px; }
+        .btn-cancel { background: white; border: 1px solid #cbd5e1; color: #475569; }
+        .btn-save { background: #10b981; color: white; }
+        .btn-save:hover { background: #059669; }
+
+    </style>
+</head>
+<body>
+
+<header>
+    <h1>算法可视化工作台</h1>
+    <p class="subtitle">File System Access API Powered</p>
+</header>
+
+<div class="action-bar">
+    <div class="status-indicator">
+        <div class="dot" id="status-dot"></div>
+        <span id="status-text">未连接文件夹</span>
+    </div>
+    <button class="btn-connect" onclick="connectDirectory()">📁 连接 /problems 文件夹</button>
+    <button class="btn-primary" id="btn-new" onclick="openModal()" disabled>✨ 新建并导入题目</button>
+</div>
+
+<div class="grid-container" id="card-grid">
+    <div class="empty-state">
+        👋 请先点击上方按钮连接您的本地 problems 文件夹，<br>系统将自动扫描并展示其中的 HTML 文件。
+    </div>
+</div>
+
+<div class="modal-overlay" id="editor-modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3 style="margin:0">新建题目</h3>
+            <button onclick="closeModal()" style="background:none; color:#666; font-size:1.5rem; padding:0;">×</button>
+        </div>
+        <div class="modal-body">
+            <div class="input-group">
+                <label>文件名称</label>
+                <input type="text" id="file-name" placeholder="例如：01. 两数之和">
+            </div>
+            <div class="input-group" style="flex:1;">
+                <label>HTML 代码内容</label>
+                <textarea id="code-editor" class="editor-area" placeholder="在此粘贴 HTML 代码..."></textarea>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn-cancel" onclick="closeModal()">取消</button>
+            <button class="btn-save" onclick="saveFileToDisk()">💾 保存文件</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    let dirHandle = null;
+
+    // ================== 核心修改：已包含返回按钮的模板 ==================
+    const DEFAULT_TEMPLATE = `<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>新算法题目</title>
+    <style>
+        body{font-family:'Segoe UI',sans-serif;padding:40px;text-align:center;background:#f8fafc;color:#333;}
+        .container{background:white;padding:30px;border-radius:12px;box-shadow:0 4px 6px rgba(0,0,0,0.1);display:inline-block;}
+    </style>
+</head>
+<body>
+
+    <div id="global-back-btn" style="position:fixed;top:15px;left:15px;z-index:9999;cursor:pointer;background:white;padding:8px 12px;border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,0.15);display:flex;align-items:center;gap:6px;border:1px solid #e2e8f0;transition:all 0.2s;user-select:none;">
+        <span style="font-size:16px;">🔙</span><span style="font-weight:600;font-size:14px;color:#334155;">返回目录</span>
+    </div>
+    <script>
+        document.getElementById('global-back-btn').addEventListener('click', () => {
+            if(window.opener) window.close();
+            else window.history.back();
+        });
+        const btn = document.getElementById('global-back-btn');
+        btn.onmouseover = () => { btn.style.transform='translateY(-2px)'; btn.style.boxShadow='0 6px 16px rgba(0,0,0,0.2)'; };
+        btn.onmouseout = () => { btn.style.transform='none'; btn.style.boxShadow='0 4px 12px rgba(0,0,0,0.15)'; };
+    <\/script>
+    <div class="container">
+        <h1>算法可视化模板</h1>
+        <p>请在此处开始编写您的代码...</p>
+    </div>
+</body>
+</html>`;
+    // ==============================================================
+
+    async function connectDirectory() {
+        if (!('showDirectoryPicker' in window)) { alert("请使用 Chrome 或 Edge 浏览器"); return; }
+        try {
+            dirHandle = await window.showDirectoryPicker();
+            document.getElementById('status-dot').classList.add('active');
+            document.getElementById('status-text').innerText = `已连接: ${dirHandle.name}`;
+            document.getElementById('btn-new').disabled = false;
+            await scanDirectory();
+        } catch (err) { if (err.name !== 'AbortError') alert("连接失败: " + err.message); }
+    }
+
+    async function scanDirectory() {
+        if (!dirHandle) return;
+        const grid = document.getElementById('card-grid');
+        grid.innerHTML = '';
+        const files = [];
+        for await (const entry of dirHandle.values()) {
+            if (entry.kind === 'file' && entry.name.endsWith('.html')) {
+                const file = await entry.getFile();
+                const text = await file.text();
+                let title = entry.name;
+                const match = text.match(/<title>(.*?)<\/title>/i);
+                if (match && match[1]) title = match[1];
+                files.push({ name: entry.name, title: title, handle: entry });
+            }
+        }
+        files.sort((a, b) => a.name.localeCompare(b.name));
+        if (files.length === 0) grid.innerHTML = '<div class="empty-state">文件夹为空，请点击“新建并导入题目”</div>';
+        else files.forEach(f => grid.appendChild(createCard(f)));
+    }
+
+    function createCard(fileData) {
+        const div = document.createElement('div');
+        div.className = 'card';
+        div.onclick = () => openFile(fileData.handle);
+        div.innerHTML = `<span class="tag">HTML</span><h3>${fileData.title}</h3><div class="card-meta"><span>📄 ${fileData.name}</span><span>↗ 点击打开</span></div>`;
+        return div;
+    }
+
+    async function openFile(fileHandle) {
+        if ((await fileHandle.queryPermission({ mode: 'read' })) !== 'granted') {
+            if ((await fileHandle.requestPermission({ mode: 'read' })) !== 'granted') return;
+        }
+        const file = await fileHandle.getFile();
+        const url = URL.createObjectURL(file);
+        window.open(url, '_blank');
+    }
+
+    function openModal() {
+        document.getElementById('editor-modal').classList.add('open');
+        document.getElementById('code-editor').value = DEFAULT_TEMPLATE;
+        document.getElementById('file-name').value = '';
+        document.getElementById('file-name').focus();
+    }
+    function closeModal() { document.getElementById('editor-modal').classList.remove('open'); }
+
+    async function saveFileToDisk() {
+        if (!dirHandle) return;
+        let name = document.getElementById('file-name').value.trim();
+        const content = document.getElementById('code-editor').value;
+        if (!name) { alert("请输入文件名称"); return; }
+        if (!name.toLowerCase().endsWith('.html')) name += '.html';
+        try {
+            const newFileHandle = await dirHandle.getFileHandle(name, { create: true });
+            const writable = await newFileHandle.createWritable();
+            await writable.write(content);
+            await writable.close();
+            alert(`✅ 文件 "${name}" 已保存！`);
+            closeModal();
+            await scanDirectory();
+        } catch (err) { alert("保存失败: " + err.message); }
+    }
+    window.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeModal(); });
+</script>
+</body>
+</html>
