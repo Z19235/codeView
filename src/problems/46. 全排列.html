@@ -1,0 +1,469 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>全排列 (Permutations) 可视化</title>
+    <style>
+        body{font-family:'Segoe UI',sans-serif;padding:20px;text-align:center;background:#f8fafc;color:#333; display:flex; flex-direction:column; align-items:center;}
+        .container{background:white;padding:30px;border-radius:12px;box-shadow:0 4px 6px rgba(0,0,0,0.1);display:inline-block; max-width: 1000px; width: 95%;}
+
+        /* 顶部控制 */
+        .controls-top { margin-bottom: 20px; display: flex; gap: 10px; justify-content: center; align-items: center; flex-wrap: wrap; }
+        .mode-switch { background: #e2e8f0; padding: 5px; border-radius: 8px; display: flex; }
+        .mode-btn { padding: 8px 16px; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; color: #64748b; background: transparent; transition: 0.2s; }
+        .mode-btn.active { background: white; color: #3b82f6; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+
+        input.arr-input { padding: 8px; border: 1px solid #cbd5e1; border-radius: 6px; width: 120px; text-align: center; font-size: 16px; }
+        button.action-btn { background: #3b82f6; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-weight: 600; }
+        button.action-btn:hover { background: #2563eb; }
+
+        /* 可视化舞台 */
+        .vis-stage {
+            min-height: 280px;
+            background: #f8fafc;
+            border: 1px dashed #cbd5e1;
+            border-radius: 8px;
+            margin: 20px 0;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+            position: relative;
+        }
+
+        /* 数组容器 */
+        .array-row { display: flex; gap: 15px; margin-bottom: 20px; align-items: center; }
+        .row-label { font-size: 14px; font-weight: bold; color: #64748b; min-width: 80px; text-align: right; margin-right: 10px;}
+
+        /* 节点样式 */
+        .node {
+            width: 50px; height: 50px;
+            border: 2px solid #cbd5e1;
+            background: white;
+            display: flex; justify-content: center; align-items: center;
+            font-size: 20px; font-weight: bold;
+            border-radius: 8px;
+            position: relative;
+            transition: all 0.2s;
+        }
+        .node .idx-label { position: absolute; bottom: -20px; font-size: 12px; color: #94a3b8; font-weight: normal; }
+
+        /* 状态高亮 */
+        .hl-fixed { background: #dbeafe; border-color: #3b82f6; } /* 已固定区域 */
+        .hl-pivot { border-color: #f59e0b; background: #fef3c7; z-index: 2; box-shadow: 0 0 0 2px #fcd34d;} /* 指针 i */
+        .hl-swap-target { border-color: #ef4444; background: #fee2e2; } /* 指针 j */
+        .hl-used { background: #f1f5f9; color: #cbd5e1; text-decoration: line-through; border-color: #e2e8f0; } /* Visited=true */
+        .hl-path { background: #dcfce7; border-color: #22c55e; } /* In Path */
+
+        /* 播放控制 */
+        .controls-playback { display: flex; gap: 10px; justify-content: center; align-items: center; background: #f1f5f9; padding: 10px; border-radius: 8px; }
+        .btn-ctrl { background: white; border: 1px solid #cbd5e1; min-width: 40px; height: 36px; border-radius: 6px; cursor: pointer; }
+        .btn-ctrl:hover { background: #e2e8f0; }
+        #progressBar { width: 300px; cursor: pointer; accent-color: #3b82f6; }
+
+        .log-box { margin-top: 15px; font-family: monospace; color: #3b82f6; font-weight: bold; height: 30px; }
+        .result-box { margin-top: 10px; font-size: 14px; color: #64748b; min-height: 40px; word-break: break-all;}
+
+        /* 表格样式 */
+        .comp-table { width: 100%; border-collapse: collapse; margin-top: 30px; font-size: 14px; text-align: left; }
+        .comp-table th, .comp-table td { border: 1px solid #e2e8f0; padding: 10px; }
+        .comp-table th { background: #f1f5f9; color: #475569; }
+        .tag { padding: 2px 6px; border-radius: 4px; font-size: 12px; font-weight: bold; }
+        .tag-good { background: #dcfce7; color: #166534; }
+        .tag-bad { background: #fee2e2; color: #991b1b; }
+        .tag-neu { background: #f1f5f9; color: #475569; }
+
+    </style>
+</head>
+<body>
+
+<div id="global-back-btn" style="position:fixed;top:15px;left:15px;z-index:9999;cursor:pointer;background:white;padding:8px 12px;border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,0.15);display:flex;align-items:center;gap:6px;border:1px solid #e2e8f0;transition:all 0.2s;user-select:none;">
+    <span style="font-size:16px;">🔙</span><span style="font-weight:600;font-size:14px;color:#334155;">返回目录</span>
+</div>
+<script>
+    document.getElementById('global-back-btn').addEventListener('click', () => {
+        if(window.opener) window.close();
+        else window.history.back();
+    });
+</script>
+
+<div class="container">
+    <h1>全排列 (Permutations) 算法对比</h1>
+
+    <div class="controls-top">
+        <div class="mode-switch">
+            <button class="mode-btn active" onclick="switchMode('swap')" id="btn-swap">交换法 (Swap)</button>
+            <button class="mode-btn" onclick="switchMode('visited')" id="btn-visited">标记法 (Visited)</button>
+        </div>
+        <span style="margin-left:10px; font-size:14px; color:#64748b;">输入数组:</span>
+        <input type="text" id="arrInput" class="arr-input" value="1,2,3">
+        <button class="action-btn" onclick="init()">🔄 生成</button>
+    </div>
+
+    <div class="vis-stage" id="stage"></div>
+
+    <div class="log-box" id="logMsg">准备就绪...</div>
+    <div class="result-box" id="resList">当前结果: []</div>
+
+    <div class="controls-playback">
+        <button class="btn-ctrl" onclick="step(-1)">⏮</button>
+        <button class="btn-ctrl" id="btnPlay" onclick="togglePlay()">⏯</button>
+        <button class="btn-ctrl" onclick="step(1)">⏭</button>
+        <input type="range" id="progressBar" value="0" min="0" max="0" oninput="scrub(this.value)">
+        <span id="stepCounter" style="font-family:monospace; width:60px;">0/0</span>
+    </div>
+
+    <h3>核心复杂度对比</h3>
+    <table class="comp-table">
+        <thead>
+        <tr>
+            <th width="15%">维度</th>
+            <th width="42%">解法一：交换法 (Swap)</th>
+            <th width="43%">解法二：标记法 (Visited Array)</th>
+        </tr>
+        </thead>
+        <tbody>
+        <tr>
+            <td><strong>时间复杂度</strong></td>
+            <td><span class="tag tag-neu">O(N × N!)</span><br>全排列共有 N! 种，生成每个结果需要复制数组 O(N)。</td>
+            <td><span class="tag tag-neu">O(N × N!)</span><br>同理，递归层数 N，每层循环 N 次，总叶子节点 N!。</td>
+        </tr>
+        <tr>
+            <td><strong>空间复杂度</strong></td>
+            <td>
+                <span class="tag tag-good">O(N)</span><br>
+                主要消耗递归栈空间 O(N)。<br>
+                <small>*不考虑存储结果集的空间</small>
+            </td>
+            <td>
+                <span class="tag tag-neu">O(N)</span><br>
+                递归栈 O(N) + 标记数组 boolean[N] + 路径列表 Path[N]。<br>
+                <small>虽同为 O(N)，但实际辅助空间更多。</small>
+            </td>
+        </tr>
+        <tr>
+            <td><strong>核心逻辑</strong></td>
+            <td>
+                <strong>原地修改</strong>：通过 swap 改变数组顺序。<br>
+                维护 [0...i-1] 为已确定部分，[i...n] 为待选部分。
+            </td>
+            <td>
+                <strong>收集路径</strong>：维护一个 path 列表。<br>
+                通过 boolean[] flag 记录哪些数字已被使用。
+            </td>
+        </tr>
+        <tr>
+            <td><strong>字典序</strong></td>
+            <td>
+                <span class="tag tag-bad">不保证</span><br>
+                交换回溯后，剩余元素的相对顺序可能被打乱。
+            </td>
+            <td>
+                <span class="tag tag-good">保证</span><br>
+                如果输入有序，按顺序遍历并标记，结果自然有序。
+            </td>
+        </tr>
+        </tbody>
+    </table>
+</div>
+
+<script>
+    let mode = 'swap';
+    let frames = [];
+    let curIdx = 0;
+    let timer = null;
+    let isPlaying = false;
+    let currentResults = []; // 累积结果
+
+    // --- 算法 1：交换法 (模拟生成帧) ---
+    function generateSwapFrames(arr) {
+        let history = [];
+        let nums = [...arr];
+        let collectedRes = [];
+
+        const record = (type, msg, i, j, currNums) => {
+            history.push({
+                mode: 'swap', type, msg,
+                nums: [...currNums],
+                i, j,
+                results: [...collectedRes]
+            });
+        };
+
+        function dfs(idx) {
+            if (idx === nums.length) {
+                let temp = [...nums];
+                collectedRes.push(temp);
+                record('found', `找到一个排列: [${temp.join(',')}]`, idx, -1, nums);
+                return;
+            }
+
+            for (let k = idx; k < nums.length; k++) {
+                record('explore', `递归 depth=${idx}: 考虑将 nums[${k}](${nums[k]}) 放到位置 ${idx}`, idx, k, nums);
+
+                // Swap
+                [nums[idx], nums[k]] = [nums[k], nums[idx]];
+                record('swap', `交换: nums[${idx}] <-> nums[${k}]`, idx, k, nums);
+
+                dfs(idx + 1);
+
+                // Backtrack
+                [nums[idx], nums[k]] = [nums[k], nums[idx]];
+                record('backtrack', `回溯: 撤销交换 nums[${idx}] <-> nums[${k}]`, idx, k, nums);
+            }
+        }
+
+        dfs(0);
+        return history;
+    }
+
+    // --- 算法 2：标记法 (模拟生成帧) ---
+    function generateVisitedFrames(arr) {
+        let history = [];
+        let n = arr.length;
+        let visited = new Array(n).fill(false);
+        let path = [];
+        let collectedRes = [];
+
+        const record = (type, msg, activeIdx) => {
+            history.push({
+                mode: 'visited', type, msg,
+                nums: [...arr], // 源数组不变
+                visited: [...visited],
+                path: [...path],
+                activeIdx,
+                results: [...collectedRes]
+            });
+        };
+
+        function dfs() {
+            if (path.length === n) {
+                collectedRes.push([...path]);
+                record('found', `路径长度达标，收集: [${path.join(',')}]`, -1);
+                return;
+            }
+
+            for (let i = 0; i < n; i++) {
+                if (!visited[i]) {
+                    visited[i] = true;
+                    path.push(arr[i]);
+                    record('add', `选择 nums[${i}](${arr[i]}) 加入路径`, i);
+
+                    dfs();
+
+                    path.pop();
+                    visited[i] = false;
+                    record('backtrack', `回溯: 移除 nums[${i}](${arr[i]})`, i);
+                }
+            }
+        }
+
+        dfs();
+        return history;
+    }
+
+    // --- 渲染引擎 ---
+    function render(idx) {
+        if (!frames[idx]) return;
+        const f = frames[idx];
+        const stage = document.getElementById('stage');
+        stage.innerHTML = ''; // 清除画布
+
+        // 更新日志和结果
+        document.getElementById('logMsg').innerText = f.msg;
+        document.getElementById('stepCounter').innerText = `${idx+1}/${frames.length}`;
+        document.getElementById('progressBar').value = idx;
+
+        let resHtml = '当前结果: ';
+        f.results.forEach(r => {
+            resHtml += `<span style="display:inline-block; border:1px solid #ddd; padding:2px 4px; margin:2px; border-radius:4px; background:#f9f9f9;">[${r.join(',')}]</span>`;
+        });
+        document.getElementById('resList').innerHTML = resHtml;
+
+        if (f.mode === 'swap') {
+            renderSwapMode(stage, f);
+        } else {
+            renderVisitedMode(stage, f);
+        }
+    }
+
+    function renderSwapMode(stage, f) {
+        const row = document.createElement('div');
+        row.className = 'array-row';
+
+        // Label
+        const label = document.createElement('div');
+        label.className = 'row-label';
+        label.innerText = "数组状态:";
+        row.appendChild(label);
+
+        f.nums.forEach((val, index) => {
+            const node = document.createElement('div');
+            node.className = 'node';
+            node.innerText = val;
+
+            const idxLbl = document.createElement('div');
+            idxLbl.className = 'idx-label';
+            idxLbl.innerText = index;
+            node.appendChild(idxLbl);
+
+            // 样式处理
+            // i 表示当前递归层级，i之前的表示已固定
+            if (index < f.i) {
+                node.classList.add('hl-fixed');
+            }
+            if (index === f.i) {
+                node.classList.add('hl-pivot'); // 当前坑位
+                // 添加指针文字
+                addPointer(node, 'i (depth)', 'top');
+            }
+            if (index === f.j) {
+                node.classList.add('hl-swap-target');
+                addPointer(node, 'j (swap)', 'bottom');
+            }
+            if (f.type === 'found') {
+                node.style.borderColor = '#22c55e';
+                node.style.background = '#f0fdf4';
+            }
+
+            row.appendChild(node);
+        });
+        stage.appendChild(row);
+    }
+
+    function renderVisitedMode(stage, f) {
+        // 1. Source Array Row (with visited status)
+        const row1 = document.createElement('div');
+        row1.className = 'array-row';
+        const lbl1 = document.createElement('div'); lbl1.className = 'row-label'; lbl1.innerText = "资源池:";
+        row1.appendChild(lbl1);
+
+        f.nums.forEach((val, index) => {
+            const node = document.createElement('div');
+            node.className = 'node';
+            node.innerText = val;
+
+            const idxLbl = document.createElement('div');
+            idxLbl.className = 'idx-label';
+            idxLbl.innerText = index;
+            node.appendChild(idxLbl);
+
+            if (f.visited[index]) {
+                node.classList.add('hl-used');
+            }
+            if (index === f.activeIdx) {
+                node.style.borderColor = '#3b82f6'; // 当前正在操作的元素
+            }
+
+            row1.appendChild(node);
+        });
+        stage.appendChild(row1);
+
+        // 2. Path Row
+        const row2 = document.createElement('div');
+        row2.className = 'array-row';
+        const lbl2 = document.createElement('div'); lbl2.className = 'row-label'; lbl2.innerText = "当前路径:";
+        row2.appendChild(lbl2);
+
+        if (f.path.length === 0) {
+            const empty = document.createElement('span');
+            empty.style.color = '#ccc';
+            empty.innerText = '( 空 )';
+            row2.appendChild(empty);
+        } else {
+            f.path.forEach((val) => {
+                const node = document.createElement('div');
+                node.className = 'node hl-path';
+                node.innerText = val;
+                row2.appendChild(node);
+            });
+        }
+        stage.appendChild(row2);
+    }
+
+    function addPointer(parent, text, pos='top') {
+        const p = document.createElement('div');
+        p.style.position = 'absolute';
+        p.style.fontSize = '10px';
+        p.style.fontWeight = 'bold';
+        p.style.color = pos==='top' ? '#f59e0b' : '#ef4444';
+        p.style.width = '100px';
+        p.innerText = text;
+        if (pos === 'top') {
+            p.style.top = '-25px';
+        } else {
+            p.style.bottom = '-35px';
+        }
+        parent.appendChild(p);
+    }
+
+    // --- 控制逻辑 ---
+    function switchMode(m) {
+        mode = m;
+        document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
+        document.getElementById(`btn-${m}`).classList.add('active');
+        init();
+    }
+
+    function init() {
+        stopPlay();
+        const val = document.getElementById('arrInput').value;
+        const arr = val.split(',').map(x => parseInt(x.trim())).filter(x => !isNaN(x));
+
+        if (arr.length > 5) {
+            alert('为了演示流畅，建议数组长度 <= 5');
+            return;
+        }
+
+        if (mode === 'swap') {
+            frames = generateSwapFrames(arr);
+        } else {
+            frames = generateVisitedFrames(arr);
+        }
+
+        document.getElementById('progressBar').max = Math.max(0, frames.length - 1);
+        curIdx = 0;
+        render(0);
+    }
+
+    function step(d) {
+        let next = curIdx + d;
+        if (next >= 0 && next < frames.length) {
+            curIdx = next;
+            render(curIdx);
+        } else {
+            stopPlay();
+        }
+    }
+
+    function scrub(v) {
+        stopPlay();
+        curIdx = parseInt(v);
+        render(curIdx);
+    }
+
+    function togglePlay() {
+        if (isPlaying) stopPlay();
+        else {
+            isPlaying = true;
+            document.getElementById('btnPlay').innerText = '⏸';
+            if (curIdx === frames.length - 1) curIdx = 0;
+            timer = setInterval(() => step(1), 600);
+        }
+    }
+
+    function stopPlay() {
+        isPlaying = false;
+        document.getElementById('btnPlay').innerText = '⏯';
+        clearInterval(timer);
+    }
+
+    window.onload = () => {
+        init();
+    };
+
+</script>
+</body>
+</html>

@@ -1,0 +1,461 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>快速排序 (QuickSort) 深度可视化</title>
+    <style>
+        body{font-family:'Segoe UI',sans-serif;padding:20px;text-align:center;background:#f8fafc;color:#333;display:flex;flex-direction:column;align-items:center;}
+        .container{background:white;padding:30px;border-radius:12px;box-shadow:0 4px 6px rgba(0,0,0,0.1);display:inline-block;max-width:1100px;width:95%;}
+        
+        /* 顶部控制 */
+        .controls-top { margin-bottom: 20px; display: flex; gap: 10px; justify-content: center; align-items: center; flex-wrap: wrap; }
+        .controls-playback { margin-top: 15px; display: flex; gap: 10px; justify-content: center; align-items: center; background: #f1f5f9; padding: 10px; border-radius: 8px;}
+        
+        input { padding: 8px; border: 1px solid #cbd5e1; border-radius: 6px; width: 60px; text-align: center; }
+        input.arr-input { width: 300px; text-align: left; }
+        
+        button { padding: 8px 16px; border: none; border-radius: 6px; cursor: pointer; transition: 0.2s; font-weight: 600; display: flex; align-items: center; gap: 5px;}
+        .btn-primary { background: #3b82f6; color: white; }
+        .btn-primary:hover { background: #2563eb; }
+        .btn-control { background: #ffffff; border: 1px solid #cbd5e1; color: #334155; min-width: 40px; justify-content: center; font-size: 18px;}
+        .btn-control:hover { background: #e2e8f0; }
+        
+        /* 进度条 */
+        #progressBar { width: 300px; cursor: pointer; accent-color: #3b82f6; }
+
+        /* 可视化区域 */
+        .visualization-area {
+            display: flex;
+            justify-content: center;
+            align-items: flex-end;
+            min-height: 220px;
+            margin: 20px 0;
+            overflow-x: auto;
+            padding-top: 60px; /* 上方留白给指针 */
+            padding-bottom: 40px;
+        }
+
+        .node-wrapper {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin: 0 6px;
+            position: relative;
+            transition: all 0.2s;
+        }
+
+        .node {
+            width: 50px;
+            height: 50px;
+            border: 2px solid #334155;
+            background: white;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 18px;
+            font-weight: bold;
+            border-radius: 8px;
+            z-index: 2;
+            transition: background-color 0.2s, transform 0.2s;
+        }
+
+        .index-label { margin-top: 5px; font-size: 12px; color: #64748b; font-family: monospace; }
+
+        /* 状态颜色 */
+        .bg-inactive { background-color: #f1f5f9; color: #cbd5e1; border-color: #e2e8f0; } /* 不在当前递归范围 */
+        .bg-active { background-color: #ffffff; border-color: #334155; } /* 当前范围 */
+        .bg-pivot { background-color: #facc15 !important; border-color: #ca8a04; } /* 基准值 */
+        .bg-compare { background-color: #bfdbfe; transform: scale(1.1); } /* 比较中 */
+        .bg-swapping { background-color: #fda4af; transform: scale(1.15); border-color: #e11d48; z-index: 10;} /* 交换中 */
+        .bg-check { background-color: #d8b4fe; transform: scale(1.05); } /* 优化检查中 */
+        .bg-sorted-final { background-color: #22c55e !important; color: white; border-color: #15803d; box-shadow: 0 0 10px #86efac; } /* 最终有序 */
+
+        /* 指针样式 */
+        .pointer {
+            position: absolute;
+            font-size: 12px;
+            font-weight: bold;
+            white-space: nowrap;
+            padding: 2px 5px;
+            border-radius: 4px;
+            transition: top 0.2s, left 0.2s;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .ptr-i { top: -35px; background: #ef4444; color: white; z-index: 5; }
+        .ptr-j { top: -35px; background: #3b82f6; color: white; z-index: 5; }
+        .ptr-pivot { bottom: -35px; background: #facc15; color: #854d0e; border: 1px solid #ca8a04; font-weight: 800; }
+        .ptr-range { bottom: -60px; color: #64748b; font-size: 10px; border: 1px dashed #94a3b8; background: #f8fafc; padding: 2px 8px;}
+
+        /* 日志 */
+        .log-panel {
+            width: 100%;
+            height: 100px;
+            overflow-y: auto;
+            background: #1e293b;
+            color: #4ade80;
+            font-family: 'Consolas', monospace;
+            padding: 15px;
+            border-radius: 8px;
+            font-size: 13px;
+            text-align: left;
+            margin-top: 10px;
+            box-sizing: border-box;
+            white-space: pre-wrap;
+            border: 1px solid #334155;
+        }
+
+        .legend {
+            font-size: 12px; color: #64748b; margin-bottom: 5px; display: flex; gap: 15px; justify-content: center; flex-wrap: wrap;
+        }
+        .legend-item { display: flex; align-items: center; gap: 4px; }
+        .box { width: 12px; height: 12px; border-radius: 2px; border: 1px solid #ccc;}
+    </style>
+</head>
+<body>
+
+    <div id="global-back-btn" style="position:fixed;top:15px;left:15px;z-index:9999;cursor:pointer;background:white;padding:8px 12px;border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,0.15);display:flex;align-items:center;gap:6px;border:1px solid #e2e8f0;transition:all 0.2s;user-select:none;">
+        <span style="font-size:16px;">🔙</span><span style="font-weight:600;font-size:14px;color:#334155;">返回目录</span>
+    </div>
+    <script>
+        document.getElementById('global-back-btn').addEventListener('click', () => {
+            if(window.opener) window.close();
+            else window.history.back();
+        });
+        const btn = document.getElementById('global-back-btn');
+        btn.onmouseover = () => { btn.style.transform='translateY(-2px)'; btn.style.boxShadow='0 6px 16px rgba(0,0,0,0.2)'; };
+        btn.onmouseout = () => { btn.style.transform='none'; btn.style.boxShadow='0 4px 12px rgba(0,0,0,0.15)'; };
+    </script>
+
+    <div class="container">
+        <h1>快速排序 (QuickSort) 可视化</h1>
+        
+        <div class="controls-top">
+            <label>初始数组: <input type="text" id="arrInput" class="arr-input" value="5,1,1,2,0,0"></label>
+            <button class="btn-primary" onclick="initAndRun()">🔄 重新生成</button>
+        </div>
+
+        <div class="legend">
+            <div class="legend-item"><div class="box" style="background:#facc15"></div>Pivot(基准)</div>
+            <div class="legend-item"><div class="box" style="background:#ef4444"></div>指针 i</div>
+            <div class="legend-item"><div class="box" style="background:#3b82f6"></div>指针 j</div>
+            <div class="legend-item"><div class="box" style="background:#d8b4fe"></div>有序性检查</div>
+            <div class="legend-item"><div class="box" style="background:#22c55e"></div>已排序</div>
+            <div class="legend-item"><div class="box" style="background:#f1f5f9; border-color:#e2e8f0"></div>非当前区间</div>
+        </div>
+
+        <div class="visualization-area" id="visArea"></div>
+
+        <div class="controls-playback">
+            <button class="btn-control" onclick="step(-1)" title="上一步">⏮</button>
+            <button class="btn-control" id="btnPlay" onclick="togglePlay()" title="播放/暂停">⏯</button>
+            <button class="btn-control" onclick="step(1)" title="下一步">⏭</button>
+            
+            <input type="range" id="progressBar" value="0" min="0" max="0" step="1" oninput="scrub(this.value)">
+            <span id="stepCounter" style="font-family:monospace; min-width: 60px;">0 / 0</span>
+            
+            <label style="font-size: 12px; margin-left: 10px;">速度: 
+                <select id="speedSelect">
+                    <option value="1200">很慢</option>
+                    <option value="600" selected>正常</option>
+                    <option value="200">快</option>
+                    <option value="50">极速</option>
+                </select>
+            </label>
+        </div>
+        
+        <div class="log-panel" id="logPanel">点击“重新生成”开始...</div>
+    </div>
+
+<script>
+    // --- 全局变量 ---
+    let frames = [];         // 存储动画帧
+    let currentFrameIndex = 0;
+    let timer = null;        // 自动播放定时器
+    let isPlaying = false;
+    
+    // --- 算法模拟与帧生成 ---
+
+    function generateFrames(initialNums) {
+        const history = [];
+        const nums = [...initialNums];
+        // 记录哪些位置已经是最终有序的
+        const sortedMap = new Array(nums.length).fill(false);
+
+        // 辅助：创建快照
+        // type: 'normal'|'check'|'swap'|'pivot'|'done'
+        const snapshot = (msg, ptrs = {}, type = 'normal', activeIndices = []) => {
+            history.push({
+                arr: [...nums],
+                sorted: [...sortedMap],
+                ptrs: { left: -1, right: -1, i: -1, j: -1, pivot: -1, ...ptrs }, // 默认-1不显示
+                msg: msg,
+                type: type,
+                activeIndices: activeIndices
+            });
+        };
+
+        // 递归函数
+        const quickSort = (left, right) => {
+            // 基础边界检查
+            if (left >= right) {
+                if (left >= 0 && left < nums.length) sortedMap[left] = true; 
+                return;
+            }
+
+            snapshot(`递归处理区间 [${left}, ${right}]`, { left, right });
+
+            // 1. 优化：检查是否已经有序
+            let ordered = true;
+            for (let k = left; k < right; k++) {
+                snapshot(`检查是否有序: 比较 nums[${k}] 和 nums[${k+1}]`, { left, right, i: k }, 'check', [k, k+1]);
+                if (nums[k] > nums[k+1]) {
+                    ordered = false;
+                    snapshot(`发现降序对: ${nums[k]} > ${nums[k+1]}，数组未排序，需要划分`, { left, right, i: k }, 'normal', [k, k+1]);
+                    break;
+                }
+            }
+
+            if (ordered) {
+                snapshot(`区间 [${left}, ${right}] 已经是升序，直接跳过！(优化)`, { left, right }, 'done', []);
+                // 标记该区间为已排序
+                for(let k = left; k <= right; k++) sortedMap[k] = true;
+                return;
+            }
+
+            // 2. 划分
+            let pIndex = partition(left, right);
+            
+            // 标记 Pivot 最终位置
+            sortedMap[pIndex] = true;
+            snapshot(`Pivot 归位完成，下标 ${pIndex} 确立`, { left, right, pivot: pIndex }, 'done', [pIndex]);
+
+            // 递归
+            quickSort(left, pIndex - 1);
+            quickSort(pIndex + 1, right);
+        };
+
+        // 划分函数
+        const partition = (left, right) => {
+            // 随机选择 pivot
+            let randIdx = left + Math.floor(Math.random() * (right - left + 1));
+            let pivot = nums[randIdx];
+            
+            snapshot(`随机选择 Pivot: nums[${randIdx}] = ${pivot}`, { left, right, pivot: randIdx }, 'pivot', [randIdx]);
+
+            // 交换到左边
+            snapshot(`将 Pivot 交换到左边界 ${left} 暂存`, { left, right, pivot: randIdx }, 'swap', [randIdx, left]);
+            swap(nums, randIdx, left);
+            
+            // 双指针
+            let i = left + 1;
+            let j = right;
+            let pPos = left; // 此时 pivot 在 left
+
+            snapshot(`初始化双指针 i=${i}, j=${j}`, { left, right, i, j, pivot: pPos });
+
+            while (true) {
+                // i 寻找 >= pivot
+                while (i <= j) {
+                    snapshot(`i=${i}: nums[i]=${nums[i]} < pivot(${pivot}) ?`, { left, right, i, j, pivot: pPos }, 'check', [i]);
+                    if (nums[i] < pivot) {
+                        i++;
+                    } else {
+                        snapshot(`nums[i]=${nums[i]} >= pivot，i 停止`, { left, right, i, j, pivot: pPos });
+                        break;
+                    }
+                }
+
+                // j 寻找 <= pivot
+                while (i <= j) {
+                    snapshot(`j=${j}: nums[j]=${nums[j]} > pivot(${pivot}) ?`, { left, right, i, j, pivot: pPos }, 'check', [j]);
+                    if (nums[j] > pivot) {
+                        j--;
+                    } else {
+                        snapshot(`nums[j]=${nums[j]} <= pivot，j 停止`, { left, right, i, j, pivot: pPos });
+                        break;
+                    }
+                }
+
+                if (i >= j) {
+                    snapshot(`指针相遇 (i >= j)，扫描结束`, { left, right, i, j, pivot: pPos });
+                    break;
+                }
+
+                // 交换
+                snapshot(`交换 nums[${i}](${nums[i]}) 和 nums[${j}](${nums[j]})`, { left, right, i, j, pivot: pPos }, 'swap', [i, j]);
+                swap(nums, i, j);
+                i++;
+                j--;
+                snapshot(`交换完成，i, j 继续靠拢`, { left, right, i, j, pivot: pPos });
+            }
+
+            // Pivot 归位
+            snapshot(`Pivot 归位: 交换 nums[${left}] 和 nums[${j}]`, { left, right, i, j, pivot: pPos }, 'swap', [left, j]);
+            swap(nums, left, j);
+            
+            return j;
+        };
+
+        const swap = (arr, a, b) => {
+            let tmp = arr[a]; arr[a] = arr[b]; arr[b] = tmp;
+        };
+
+        // 开始
+        snapshot("算法开始", {});
+        quickSort(0, nums.length - 1);
+        snapshot("排序完成", {}, 'done');
+
+        return history;
+    }
+
+    // --- 渲染引擎 ---
+
+    function initAndRun() {
+        stopAutoPlay();
+        
+        const arrStr = document.getElementById('arrInput').value;
+        const nums = arrStr.split(',').map(x => {
+            const parsed = parseInt(x.trim());
+            return isNaN(parsed) ? 0 : parsed;
+        });
+
+        // 1. 预计算所有帧
+        frames = generateFrames(nums);
+        
+        // 2. 重置 UI
+        document.getElementById('progressBar').max = frames.length - 1;
+        document.getElementById('progressBar').value = 0;
+        
+        currentFrameIndex = 0;
+        renderFrame(0);
+        
+        document.getElementById('btnPlay').innerHTML = "⏯";
+    }
+
+    function renderFrame(index) {
+        if (index < 0 || index >= frames.length) return;
+
+        const frame = frames[index];
+        const { arr, sorted, ptrs, msg, type, activeIndices } = frame;
+
+        // 更新日志
+        document.getElementById('logPanel').innerText = `[Step ${index + 1}/${frames.length}] ${msg}`;
+        document.getElementById('stepCounter').innerText = `${index + 1}/${frames.length}`;
+        document.getElementById('progressBar').value = index;
+
+        // 渲染 DOM
+        const area = document.getElementById('visArea');
+        area.innerHTML = '';
+
+        arr.forEach((val, idx) => {
+            const wrapper = document.createElement('div');
+            wrapper.className = 'node-wrapper';
+
+            const node = document.createElement('div');
+            node.className = 'node';
+            node.innerText = val;
+
+            // 1. 基础状态：是否在当前递归区间内
+            const isInRange = (ptrs.left !== -1 && ptrs.right !== -1 && idx >= ptrs.left && idx <= ptrs.right);
+            
+            if (!isInRange && ptrs.left !== -1) { // -1 表示初始状态或全范围
+                node.classList.add('bg-inactive');
+            }
+
+            // 2. 已排序状态 (Green)
+            if (sorted[idx]) {
+                node.classList.add('bg-sorted-final');
+            }
+
+            // 3. 动态高亮 (Check/Swap/Pivot)
+            if (activeIndices && activeIndices.includes(idx)) {
+                if (type === 'swap') node.classList.add('bg-swapping');
+                else if (type === 'check') node.classList.add('bg-check');
+                else if (type === 'pivot') node.classList.add('bg-pivot');
+            }
+            
+            // Pivot 位置常亮 (如果不是 Swap 状态)
+            if (ptrs.pivot === idx && type !== 'swap' && !sorted[idx]) {
+                node.classList.add('bg-pivot');
+            }
+
+            // 指针 DOM
+            const ptrContainer = document.createDocumentFragment();
+            
+            if (ptrs.i === idx) addPointer(ptrContainer, 'i', 'ptr-i');
+            if (ptrs.j === idx) addPointer(ptrContainer, 'j', 'ptr-j');
+            if (ptrs.pivot === idx && ptrs.pivot !== ptrs.left) addPointer(ptrContainer, 'Pivot', 'ptr-pivot'); // 已经在left时不需要额外显示
+            
+            // 区间边界 L / R
+            if (ptrs.left === idx) addPointer(ptrContainer, 'L', 'ptr-range');
+            if (ptrs.right === idx) addPointer(ptrContainer, 'R', 'ptr-range');
+
+            wrapper.appendChild(ptrContainer);
+            wrapper.appendChild(node);
+            
+            const label = document.createElement('div');
+            label.className = 'index-label';
+            label.innerText = idx;
+            wrapper.appendChild(label);
+
+            area.appendChild(wrapper);
+        });
+    }
+
+    function addPointer(parent, text, className) {
+        const p = document.createElement('div');
+        p.className = `pointer ${className}`;
+        p.innerText = text;
+        parent.appendChild(p);
+    }
+
+    // --- 控制逻辑 ---
+
+    function step(delta) {
+        const newIndex = currentFrameIndex + delta;
+        if (newIndex >= 0 && newIndex < frames.length) {
+            currentFrameIndex = newIndex;
+            renderFrame(currentFrameIndex);
+        } else {
+            if (isPlaying && delta > 0) stopAutoPlay();
+        }
+    }
+
+    function scrub(val) {
+        stopAutoPlay();
+        currentFrameIndex = parseInt(val);
+        renderFrame(currentFrameIndex);
+    }
+
+    function togglePlay() {
+        if (isPlaying) stopAutoPlay();
+        else startAutoPlay();
+    }
+
+    function startAutoPlay() {
+        if (currentFrameIndex >= frames.length - 1) currentFrameIndex = -1;
+        isPlaying = true;
+        document.getElementById('btnPlay').innerHTML = "⏸";
+        
+        const speed = parseInt(document.getElementById('speedSelect').value);
+        
+        // 立即执行一步
+        step(1);
+        timer = setInterval(() => {
+            step(1);
+        }, speed);
+    }
+
+    function stopAutoPlay() {
+        isPlaying = false;
+        document.getElementById('btnPlay').innerHTML = "⏯";
+        clearInterval(timer);
+    }
+
+    // 初始化
+    window.onload = initAndRun;
+
+</script>
+</body>
+</html>

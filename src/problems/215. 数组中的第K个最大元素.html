@@ -3,349 +3,488 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>LeetCode 215: Kth Largest (Heap) 可视化</title>
+    <title>Top K: 堆排序 vs 快速选择 (修复版)</title>
     <style>
         :root {
-            --bg-color: #f8f9fa;
-            --node-size: 50px;
-            --primary-color: #1890ff; /* Blue */
-            --compare-color: #faad14; /* Orange */
-            --swap-color: #ff4d4f;    /* Red */
-            --sorted-color: #52c41a;  /* Green */
-            --inactive-color: #d9d9d9;
+            --primary: #2563eb;
+            --heap-color: #8b5cf6;
+            --quick-color: #ec4899;
+            --bg: #f1f5f9;
+            --card-bg: #ffffff;
+            --text-main: #1e293b;
         }
-        body { font-family: 'Segoe UI', sans-serif; background: var(--bg-color); display: flex; flex-direction: column; align-items: center; padding: 20px; margin: 0; }
 
-        /* Layout */
-        .container { display: flex; flex-direction: column; align-items: center; gap: 20px; width: 100%; max-width: 1000px; }
-        .canvas-box { position: relative; width: 800px; height: 350px; background: white; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); border: 1px solid #e8e8e8; }
-        .array-box { display: flex; gap: 5px; margin-top: 10px; padding: 10px; background: white; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+        body { font-family: 'Segoe UI', sans-serif; background: var(--bg); color: var(--text-main); display: flex; flex-direction: column; align-items: center; padding: 20px; margin: 0; }
 
-        /* Nodes (Tree) */
-        .node {
-            position: absolute; width: var(--node-size); height: var(--node-size);
-            border-radius: 50%; border: 3px solid #333; background: white;
-            display: flex; align-items: center; justify-content: center;
-            font-weight: bold; font-size: 18px; z-index: 2;
-            transition: all 0.3s;
+        /* 布局容器 */
+        .main-card { background: var(--card-bg); width: 95%; max-width: 1000px; border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); padding: 24px; display: flex; flex-direction: column; align-items: center; }
+
+        /* 顶部导航 */
+        .nav-tabs { display: flex; gap: 10px; margin-bottom: 20px; background: #e2e8f0; padding: 4px; border-radius: 8px; }
+        .tab-btn { padding: 8px 20px; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; color: #64748b; background: transparent; transition: all 0.2s; }
+        .tab-btn.active { background: white; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        .tab-btn.active.t-heap { color: var(--heap-color); }
+        .tab-btn.active.t-quick { color: var(--quick-color); }
+
+        /* 输入区 */
+        .input-group { display: flex; gap: 10px; align-items: center; margin-bottom: 20px; flex-wrap: wrap; justify-content: center; }
+        input { padding: 8px; border: 1px solid #cbd5e1; border-radius: 6px; text-align: center; }
+        .btn-run { background: var(--primary); color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-weight: 600; }
+        .btn-run:hover { background: #1d4ed8; }
+
+        /* === 核心可视化舞台 (关键修复点) === */
+        /* 使用 relative 定位，确保内部 absolute 元素相对于此框定位 */
+        #stage-container {
+            width: 800px;
+            height: 400px;
+            position: relative;
+            background: #fafafa;
+            border: 1px dashed #cbd5e1;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            overflow: hidden; /* 防止溢出 */
+            display: flex;
+            justify-content: center;
+            align-items: center;
         }
-        .node.outside-heap { background: var(--inactive-color); border-color: #999; color: #666; }
-        .node.kth-found { background: var(--sorted-color); color: white; border-color: var(--sorted-color); box-shadow: 0 0 15px var(--sorted-color); }
-        .node.comparing { border-color: var(--compare-color); background: #fffbe6; }
-        .node.swapping { border-color: var(--swap-color); background: #fff1f0; transform: scale(1.1); }
 
-        /* Array Elements */
-        .arr-idx { width: 40px; height: 40px; border: 2px solid #ccc; display: flex; flex-direction: column; align-items: center; justify-content: center; font-weight: bold; border-radius: 4px; position: relative; transition: all 0.3s; }
-        .arr-idx span { font-size: 10px; color: #888; margin-top: -20px; position: absolute; top: 0; }
-        .arr-idx.active-range { border-color: #333; background: white; }
-        .arr-idx.outside-range { background: var(--inactive-color); border-color: #ddd; color: #888; }
-
-        /* SVG Lines */
-        svg { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; pointer-events: none; }
-        line { stroke: #999; stroke-width: 2; transition: stroke 0.3s; }
-
-        /* Pointers/Labels */
-        .pointer {
-            position: absolute; padding: 2px 6px; border-radius: 4px; color: white; font-size: 12px; font-weight: bold; z-index: 10;
-            transition: all 0.3s; pointer-events: none; white-space: nowrap;
+        /* 通用节点样式 */
+        .node-base {
+            display: flex; justify-content: center; align-items: center;
+            font-weight: bold; font-size: 16px; background: white;
+            border: 2px solid #334155; transition: transform 0.2s, background-color 0.2s;
+            z-index: 10;
         }
-        .ptr-i { background: #1890ff; top: -25px; left: 50%; transform: translateX(-50%); }
-        .ptr-l { background: #722ed1; bottom: -25px; left: -10px; }
-        .ptr-r { background: #eb2f96; bottom: -25px; right: -10px; }
-        .ptr-largest { background: #faad14; top: -25px; right: -40px; border: 1px solid #333; color: #333; }
 
-        /* Controls */
-        .controls { display: flex; gap: 10px; align-items: center; }
-        button { padding: 8px 16px; cursor: pointer; background: var(--primary-color); color: white; border: none; border-radius: 4px; font-size: 16px; }
-        button:disabled { background: #ccc; cursor: not-allowed; }
-        button.secondary { background: #fff; border: 1px solid var(--primary-color); color: var(--primary-color); }
+        /* --- 模式 A: 堆 (绝对定位) --- */
+        .heap-node {
+            position: absolute; width: 44px; height: 44px; border-radius: 50%;
+            /* x,y 由 JS 设置 */
+        }
+        /* SVG 连线层：必须覆盖整个容器且位于节点下方 */
+        .lines-layer {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; pointer-events: none;
+        }
+        line { stroke: #cbd5e1; stroke-width: 2; }
 
-        /* Explanation */
-        .info-panel { width: 800px; background: #e6f7ff; border: 1px solid #91d5ff; padding: 15px; border-radius: 8px; }
-        .code { font-family: monospace; font-weight: bold; color: #003a8c; margin-bottom: 5px; display: block; }
-        .desc { color: #555; }
+        /* --- 模式 B: 快选 (Flex流式布局) --- */
+        .quick-row { display: flex; gap: 8px; align-items: flex-end; padding-bottom: 40px; }
+        .quick-node {
+            width: 45px; height: 45px; border-radius: 6px; position: relative;
+        }
+        .idx-tag { position: absolute; bottom: -20px; width: 100%; text-align: center; font-size: 10px; color: #94a3b8; }
 
-        .legend { display: flex; gap: 15px; font-size: 12px; margin-top: 5px; }
-        .legend-item { display: flex; align-items: center; gap: 5px; }
-        .dot { width: 12px; height: 12px; border-radius: 50%; border: 2px solid #333; }
+        /* --- 状态高亮 --- */
+        .hl-compare { background: #fef3c7 !important; border-color: #d97706 !important; transform: scale(1.1); }
+        .hl-swap { background: #fee2e2 !important; border-color: #ef4444 !important; transform: scale(1.15); }
+        .hl-pivot { background: #fce7f3 !important; border-color: #db2777 !important; }
+        .hl-sorted { background: #dcfce7 !important; border-color: #16a34a !important; color: #166534; box-shadow: 0 0 10px #86efac; }
+        .hl-inactive { opacity: 0.3; border-color: #e2e8f0; }
+
+        /* --- 指针标记 --- */
+        .ptr {
+            position: absolute; font-size: 11px; font-weight: bold; color: white;
+            padding: 2px 5px; border-radius: 4px; pointer-events: none; z-index: 20;
+            white-space: nowrap; transition: all 0.2s;
+        }
+        .ptr-i { background: #ef4444; }
+        .ptr-j { background: #3b82f6; }
+        .ptr-p { background: #db2777; bottom: -28px; }
+
+        /* 底部控制 */
+        .controls-btm { width: 100%; display: flex; gap: 15px; align-items: center; justify-content: center; background: #f8fafc; padding: 15px; border-radius: 8px; }
+        input[type=range] { flex-grow: 1; max-width: 300px; accent-color: var(--primary); }
+        .log-box { width: 100%; height: 50px; margin-top: 10px; font-family: monospace; font-size: 13px; color: #475569; text-align: center; line-height: 50px; background: #f1f5f9; border-radius: 6px; }
+
+        /* 表格区域 */
+        .table-section { margin-top: 30px; width: 100%; }
+        table { width: 100%; border-collapse: collapse; font-size: 14px; }
+        th, td { border: 1px solid #e2e8f0; padding: 12px; text-align: left; }
+        th { background: #f8fafc; color: #64748b; }
+        .tag { padding: 2px 6px; border-radius: 4px; font-size: 12px; font-weight: bold; }
+        .tag-good { background: #dcfce7; color: #166534; }
+        .tag-bad { background: #fee2e2; color: #991b1b; }
+        .tag-mid { background: #fef9c3; color: #854d0e; }
+
     </style>
 </head>
 <body>
 
-<div class="container">
-    <h2>Find Kth Largest (K=2) - Max Heap Method</h2>
+<div onclick="window.opener?window.close():window.history.back()" style="position:fixed;top:15px;left:15px;cursor:pointer;background:white;padding:8px 12px;border-radius:8px;border:1px solid #e2e8f0;box-shadow:0 2px 8px rgba(0,0,0,0.1);z-index:99;">🔙 返回</div>
 
-    <div class="legend">
-        <div class="legend-item"><div class="dot" style="background:white"></div> 堆中节点</div>
-        <div class="legend-item"><div class="dot" style="background:var(--inactive-color)"></div> 已移除/堆外</div>
-        <div class="legend-item"><div class="dot" style="background:#fffbe6; border-color:var(--compare-color)"></div> 比较中</div>
-        <div class="legend-item"><div class="dot" style="background:#fff1f0; border-color:var(--swap-color)"></div> 交换</div>
-        <div class="legend-item"><div class="dot" style="background:var(--sorted-color); border-color:var(--sorted-color)"></div> 结果 (Kth)</div>
+<div class="main-card">
+    <h2>数组中的第 K 个最大元素</h2>
+
+    <div class="nav-tabs">
+        <button class="tab-btn active t-heap" onclick="switchMode('heap')">⚡ 堆排序 (Heap)</button>
+        <button class="tab-btn t-quick" onclick="switchMode('quick')">🚀 快速选择 (Quick Select)</button>
     </div>
 
-    <div class="canvas-box" id="tree-container">
-        <svg id="svg-lines"></svg>
+    <div class="input-group">
+        <label>数组: <input type="text" id="arrIn" value="3, 2, 1, 5, 6, 4" style="width:200px"></label>
+        <label>K: <input type="number" id="kIn" value="2" style="width:50px" min="1"></label>
+        <button class="btn-run" onclick="init()">🔄 生成演示</button>
     </div>
 
-    <div class="array-box" id="array-container">
+    <div id="stage-container">
     </div>
 
-    <div class="info-panel">
-        <span class="code" id="step-code">// 算法准备开始</span>
-        <span class="desc" id="step-desc">初始数组: [3, 2, 3, 1, 2, 4, 5, 5, 6], K=2</span>
+    <div class="controls-btm">
+        <button class="btn-run" style="background:white; color:#333; border:1px solid #ccc" onclick="step(-1)">⏮</button>
+        <button class="btn-run" id="playBtn" onclick="togglePlay()">⏯</button>
+        <button class="btn-run" style="background:white; color:#333; border:1px solid #ccc" onclick="step(1)">⏭</button>
+        <input type="range" id="progressBar" min="0" value="0" oninput="seek(this.value)">
+        <span id="stepTxt" style="font-family:monospace; width:60px">0/0</span>
+        <select id="speedSel">
+            <option value="800">慢</option>
+            <option value="400" selected>中</option>
+            <option value="100">快</option>
+        </select>
     </div>
+    <div class="log-box" id="logTxt">准备就绪...</div>
 
-    <div class="controls">
-        <button onclick="reset()" class="secondary">重置 (Reset)</button>
-        <button onclick="prevStep()" id="btn-prev" disabled>上一步</button>
-        <button onclick="nextStep()" id="btn-next">下一步</button>
+    <div class="table-section">
+        <h3>📊 算法核心对比</h3>
+        <table>
+            <thead>
+            <tr>
+                <th width="15%">维度</th>
+                <th width="42%">Max Heap (堆排序思路)</th>
+                <th width="43%">Quick Select (快速选择)</th>
+            </tr>
+            </thead>
+            <tbody>
+            <tr>
+                <td><strong>时间复杂度</strong></td>
+                <td>
+                    <span class="tag tag-mid">O(N + K log N)</span><br>
+                    <small>建堆 O(N)，弹出 K 次每次 O(log N)</small>
+                </td>
+                <td>
+                    <span class="tag tag-good">O(N)</span> (期望)<br>
+                    <small>每次排除一半区域，呈收敛级数</small>
+                </td>
+            </tr>
+            <tr>
+                <td><strong>最坏情况</strong></td>
+                <td>稳定 O(N log N)</td>
+                <td><span class="tag tag-bad">O(N²)</span> (如果 Pivot 选得很差)</td>
+            </tr>
+            <tr>
+                <td><strong>空间复杂度</strong></td>
+                <td><span class="tag tag-good">O(1)</span> (原地建堆)</td>
+                <td><span class="tag tag-good">O(1)</span> (迭代写法) / O(log N) (递归栈)</td>
+            </tr>
+            <tr>
+                <td><strong>内存访问</strong></td>
+                <td>
+                    <span class="tag tag-bad">跳跃式</span><br>
+                    <small>父子节点索引 index 与 2*index+1 距离远，缓存命中率低</small>
+                </td>
+                <td>
+                    <span class="tag tag-good">顺序式</span><br>
+                    <small>双指针线性扫描数组，CPU 缓存极其友好</small>
+                </td>
+            </tr>
+            </tbody>
+        </table>
     </div>
 </div>
 
 <script>
-    // ================= CONFIGURATION =================
-    // 示例数据：LeetCode 215 Example 2 的简化版，或者是 Example 1
-    // 使用: [3, 2, 1, 5, 6, 4], K = 2. 目标结果是 5.
-    const INITIAL_NUMS = [3, 2, 1, 5, 6, 4];
-    const K_TARGET = 2;
+    // --- 全局变量 ---
+    let mode = 'heap';
+    let frames = [];
+    let curFrame = 0;
+    let isPlaying = false;
+    let timer = null;
 
-    // 树布局坐标 (hardcoded for 6-7 nodes for simplicity)
-    const POSITIONS = [
-        { x: 400, y: 50 },  // 0
-        { x: 200, y: 150 }, // 1
-        { x: 600, y: 150 }, // 2
-        { x: 100, y: 250 }, // 3
-        { x: 300, y: 250 }, // 4
-        { x: 500, y: 250 }  // 5
+    // --- 堆坐标系统 (固定坐标解决乱飘问题) ---
+    // 适配 800x400 容器
+    const HEAP_POS = [
+        {x: 400, y: 50},  // root
+        {x: 220, y: 130}, {x: 580, y: 130}, // layer 2
+        {x: 130, y: 220}, {x: 310, y: 220}, {x: 490, y: 220}, {x: 670, y: 220}, // layer 3
+        {x: 80,  y: 300}, {x: 180, y: 300}, {x: 260, y: 300} // layer 4 demo
     ];
 
-    // ================= ALGORITHM SIMULATION =================
-    // 我们不是实时运行算法，而是先在内存中运行一遍，记录下每一步的状态(Snapshot)
-    let steps = [];
+    // ===========================
+    // 1. 算法逻辑生成器 (Core Logic)
+    // ===========================
 
-    function generateSteps() {
-        steps = [];
-        let nums = [...INITIAL_NUMS];
+    // --- Heap Logic ---
+    function generateHeapFrames(arr, k) {
+        let nums = [...arr];
         let n = nums.length;
+        let history = [];
 
-        recordState(nums, n, null, "算法开始: 初始化 n = " + n, "init");
+        const snap = (msg, type, active=[], ptrs={}) => {
+            history.push({ mode: 'heap', nums: [...nums], size: ptrs.size??n, msg, type, active, ptrs });
+        };
 
-        // 1. Build Max Heap
-        for (let i = Math.floor(n / 2) - 1; i >= 0; i--) {
-            recordState(nums, n, { i }, `buildMaxHeap: 对节点 i=${i} 进行 heapify`, "build");
-            maxHeapifySim(nums, n, i);
+        // Heapify Down
+        const heapify = (size, i) => {
+            let largest = i;
+            let l = 2*i + 1, r = 2*i + 2;
+            snap(`比较节点 ${i} 与子节点`, 'compare', [i, l<size?l:-1, r<size?r:-1], {size, i});
+
+            if (l < size && nums[l] > nums[largest]) largest = l;
+            if (r < size && nums[r] > nums[largest]) largest = r;
+
+            if (largest !== i) {
+                snap(`交换: ${nums[i]} <-> ${nums[largest]}`, 'swap', [i, largest], {size, i, largest});
+                [nums[i], nums[largest]] = [nums[largest], nums[i]];
+                heapify(size, largest);
+            }
+        };
+
+        // 1. Build Heap
+        for (let i = Math.floor(n/2)-1; i >= 0; i--) heapify(n, i);
+        snap("大顶堆构建完成", 'sorted', [0], {size: n});
+
+        // 2. Extract K times
+        let currSize = n;
+        for (let i = n-1; i >= n - k + 1; i--) { // 只需做 k-1 次交换，第 k 次堆顶即结果
+            snap(`交换堆顶与末尾，移除最大值 ${nums[0]}`, 'swap', [0, i], {size: currSize});
+            [nums[0], nums[i]] = [nums[i], nums[0]];
+            currSize--;
+            snap(`修复堆顶，堆大小: ${currSize}`, 'normal', [], {size: currSize});
+            heapify(currSize, 0);
         }
 
-        recordState(nums, n, null, "大顶堆构建完成。堆顶是当前最大值。", "built");
-
-        // 2. Extract K-1 times
-        // 注意：原代码逻辑是 i >= nums.length - k + 1
-        // 比如 length=6, k=2. 循环 i 从 5 到 6-2+1=5. 只执行一次交换。
-        // 交换后 n--, 然后 heapify.
-        // 最后 nums[0] 就是第 K 大。
-
-        for (let i = nums.length - 1; i >= nums.length - K_TARGET + 1; i--) {
-            recordState(nums, n, { swapA: 0, swapB: i }, `提取最大值: 交换堆顶(0)与末尾(${i})`, "swap-root");
-
-            // Swap
-            let temp = nums[0];
-            nums[0] = nums[i];
-            nums[i] = temp;
-
-            n--; // Reduce heap size
-            recordState(nums, n, null, `堆大小减小 n=${n}。节点 ${i} 已就位(第${nums.length-i}大)。`, "shrink");
-
-            recordState(nums, n, { i: 0 }, `maxHeapfy: 修复堆顶 i=0`, "fix");
-            maxHeapifySim(nums, n, 0);
-        }
-
-        recordState(nums, n, { result: 0 }, `循环结束。堆顶 nums[0] 即为第 ${K_TARGET} 大元素。`, "finish");
+        snap(`堆顶 ${nums[0]} 即为第 ${k} 大元素`, 'found', [0], {size: currSize});
+        return history;
     }
 
-    function maxHeapifySim(a, n, i) {
-        let l = i * 2 + 1;
-        let r = i * 2 + 2;
-        let largest = i;
+    // --- Quick Select Logic ---
+    function generateQuickFrames(arr, k) {
+        let nums = [...arr];
+        let n = nums.length;
+        let target = n - k;
+        let history = [];
 
-        // Visual: highlighting comparison
-        let pointers = { i, l: (l<n?l:null), r: (r<n?r:null), largest };
-        recordState(a, n, pointers, `maxHeapfy: 比较 i=${i} 与子节点`, "compare");
+        const snap = (msg, type, active=[], ptrs={}) => {
+            history.push({ mode: 'quick', nums: [...nums], msg, type, active, ptrs });
+        };
 
-        if (l < n && a[l] > a[largest]) {
-            largest = l;
-            recordState(a, n, { ...pointers, largest }, `左孩子更大，更新 largest=${l}`, "compare");
+        let left = 0, right = n - 1;
+        while (true) {
+            if (left === right) {
+                snap(`区间缩小为1，找到结果 ${nums[left]}`, 'found', [left], {left, right, target});
+                break;
+            }
+
+            let pivotIdx = left;
+            let pivotVal = nums[pivotIdx];
+            snap(`区间 [${left}, ${right}], Pivot=${pivotVal}`, 'pivot', [pivotIdx], {left, right, target, pivot: pivotIdx});
+
+            // Swap pivot to right
+            [nums[pivotIdx], nums[right]] = [nums[right], nums[pivotIdx]];
+            snap(`Pivot 移至最右暂存`, 'swap', [pivotIdx, right], {left, right, target, pivot: right});
+
+            let store = left;
+            for (let i = left; i < right; i++) {
+                snap(`比较 ${nums[i]} < Pivot ?`, 'compare', [i, right], {left, right, target, i, store, pivot: right});
+                if (nums[i] < pivotVal) {
+                    if (i !== store) {
+                        [nums[i], nums[store]] = [nums[store], nums[i]];
+                        snap(`交换到 store 位置`, 'swap', [i, store], {left, right, target, i, store, pivot: right});
+                    }
+                    store++;
+                }
+            }
+            [nums[store], nums[right]] = [nums[right], nums[store]];
+            snap(`Pivot 归位`, 'swap', [store, right], {left, right, target, pivot: store});
+
+            if (store === target) {
+                snap(`Pivot 下标 ${store} 等于目标 ${target}，找到结果!`, 'found', [store], {left, right, target, pivot: store});
+                break;
+            } else if (store < target) {
+                snap(`Pivot < Target，向右找`, 'normal', [], {left: store+1, right, target});
+                left = store + 1;
+            } else {
+                snap(`Pivot > Target，向左找`, 'normal', [], {left, right: store-1, target});
+                right = store - 1;
+            }
         }
-        if (r < n && a[r] > a[largest]) {
-            largest = r;
-            recordState(a, n, { ...pointers, largest }, `右孩子更大，更新 largest=${r}`, "compare");
-        }
-
-        if (largest !== i) {
-            recordState(a, n, { swapA: i, swapB: largest, i, largest }, `执行交换: i=${i} <-> largest=${largest}`, "swap");
-
-            let temp = a[i];
-            a[i] = a[largest];
-            a[largest] = temp;
-
-            // Post swap state
-            recordState(a, n, { i, largest }, `交换完成，递归处理子树 ${largest}`, "post-swap");
-
-            maxHeapifySim(a, n, largest);
-        }
+        return history;
     }
 
-    function recordState(currentNums, heapSize, pointers, desc, type) {
-        steps.push({
-            nums: [...currentNums], // Copy array
-            n: heapSize,
-            pointers: pointers || {},
-            desc: desc,
-            type: type
-        });
+    // ===========================
+    // 2. 渲染引擎 (Renderer)
+    // ===========================
+
+    function renderFrame(idx) {
+        if (!frames[idx]) return;
+        const f = frames[idx];
+        const stage = document.getElementById('stage-container');
+        stage.innerHTML = ''; // 清空画布
+
+        // 更新控制条
+        document.getElementById('logTxt').innerText = f.msg;
+        document.getElementById('stepTxt').innerText = `${idx+1}/${frames.length}`;
+        document.getElementById('progressBar').value = idx;
+
+        if (mode === 'heap') renderHeap(stage, f);
+        else renderQuick(stage, f);
     }
 
-    // ================= RENDERING =================
-    let currentStepIndex = 0;
+    function renderHeap(stage, frame) {
+        // 1. 绘制 SVG 连线
+        const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+        svg.setAttribute("class", "lines-layer");
 
-    function render(stepIndex) {
-        const step = steps[stepIndex];
-        const { nums, n, pointers, desc, type } = step;
-
-        // Update Text
-        document.getElementById('step-desc').innerText = desc;
-        let codeText = "";
-        if(type === 'compare') codeText = "if (l < n && a[l] > a[largest]) ...";
-        else if(type === 'swap') codeText = "swap(a, i, largest);";
-        else if(type === 'swap-root') codeText = "swap(nums, 0, i); n--;";
-        else if(type === 'finish') codeText = "return nums[0];";
-        else codeText = "Processing...";
-        document.getElementById('step-code').innerText = codeText;
-
-        // Render Array
-        const arrContainer = document.getElementById('array-container');
-        arrContainer.innerHTML = '';
-        nums.forEach((val, idx) => {
-            const div = document.createElement('div');
-            div.className = `arr-idx ${idx < n ? 'active-range' : 'outside-range'}`;
-            div.innerHTML = `<span>${idx}</span>${val}`;
-            if (pointers.i === idx) div.style.borderColor = '#1890ff';
-            if (pointers.swapA === idx || pointers.swapB === idx) div.style.backgroundColor = '#fff1f0';
-            arrContainer.appendChild(div);
-        });
-
-        // Render Tree Nodes
-        const treeContainer = document.getElementById('tree-container');
-        // Clear previous nodes but keep SVG
-        const oldNodes = document.querySelectorAll('.node, .pointer');
-        oldNodes.forEach(el => el.remove());
-
-        const svg = document.getElementById('svg-lines');
-        svg.innerHTML = ''; // Clear lines
-
-        // Draw Nodes
-        nums.forEach((val, idx) => {
-            if (idx >= POSITIONS.length) return; // Limit visualization to defined positions
-
-            const pos = POSITIONS[idx];
-            const isOutsideHeap = idx >= n;
-
-            // Create Node
-            const el = document.createElement('div');
-            el.className = 'node';
-            el.innerText = val;
-            el.style.left = (pos.x - 25) + 'px';
-            el.style.top = (pos.y - 25) + 'px';
-
-            // Styles based on state
-            if (isOutsideHeap) el.classList.add('outside-heap');
-
-            // Special Highlights
-            if (type === 'compare') {
-                if ([pointers.i, pointers.l, pointers.r].includes(idx)) el.classList.add('comparing');
-            }
-            if (pointers.swapA === idx || pointers.swapB === idx) {
-                el.classList.add('swapping');
-            }
-            if (type === 'finish' && idx === 0) {
-                el.classList.add('kth-found');
-            }
-
-            treeContainer.appendChild(el);
-
-            // Draw Lines (Parent to Child)
-            const leftChildIdx = 2 * idx + 1;
-            const rightChildIdx = 2 * idx + 2;
-
-            [leftChildIdx, rightChildIdx].forEach(childIdx => {
-                if (childIdx < nums.length && POSITIONS[childIdx]) {
-                    const childPos = POSITIONS[childIdx];
-                    const line = document.createElementNS("http://www.w3.org/2000/svg", 'line');
-                    line.setAttribute('x1', pos.x);
-                    line.setAttribute('y1', pos.y + 25);
-                    line.setAttribute('x2', childPos.x);
-                    line.setAttribute('y2', childPos.y - 25);
-                    if (childIdx >= n) line.setAttribute('stroke', '#e8e8e8'); // Faint line for removed nodes
+        frame.nums.forEach((val, i) => {
+            if (i >= HEAP_POS.length) return;
+            // 画父节点连线
+            if (i > 0) {
+                const pIdx = Math.floor((i-1)/2);
+                if (pIdx < HEAP_POS.length) {
+                    const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+                    line.setAttribute("x1", HEAP_POS[pIdx].x + 22); // center of node
+                    line.setAttribute("y1", HEAP_POS[pIdx].y + 22);
+                    line.setAttribute("x2", HEAP_POS[i].x + 22);
+                    line.setAttribute("y2", HEAP_POS[i].y + 22);
+                    if (i >= frame.size) line.style.opacity = 0.1; // 堆外虚化
                     svg.appendChild(line);
                 }
-            });
-
-            // Draw Pointers (Labels) attached to nodes
-            addPointerLabel(idx, pointers, pos, treeContainer);
+            }
         });
+        stage.appendChild(svg);
 
-        // Button States
-        document.getElementById('btn-prev').disabled = stepIndex === 0;
-        document.getElementById('btn-next').disabled = stepIndex === steps.length - 1;
-        if(stepIndex === steps.length - 1) document.getElementById('btn-next').innerText = "完成";
-        else document.getElementById('btn-next').innerText = "下一步";
-    }
+        // 2. 绘制节点
+        frame.nums.forEach((val, i) => {
+            if (i >= HEAP_POS.length) return;
+            const node = document.createElement('div');
+            node.className = 'node-base heap-node';
+            node.innerText = val;
+            node.style.left = HEAP_POS[i].x + 'px';
+            node.style.top = HEAP_POS[i].y + 'px';
 
-    function addPointerLabel(idx, pointers, pos, container) {
-        // Create labels map
-        const labels = [];
-        if (pointers.i === idx) labels.push({ text: 'i', cls: 'ptr-i' });
-        if (pointers.l === idx) labels.push({ text: 'L', cls: 'ptr-l' });
-        if (pointers.r === idx) labels.push({ text: 'R', cls: 'ptr-r' });
-        if (pointers.largest === idx) labels.push({ text: 'Largest', cls: 'ptr-largest' });
+            // 样式处理
+            if (i >= frame.size) node.classList.add('hl-inactive');
+            if (frame.active.includes(i)) {
+                if (frame.type === 'compare') node.classList.add('hl-compare');
+                if (frame.type === 'swap') node.classList.add('hl-swap');
+                if (frame.type === 'found') node.classList.add('hl-sorted');
+            }
 
-        labels.forEach(lbl => {
-            const div = document.createElement('div');
-            div.className = `pointer ${lbl.cls}`;
-            div.innerText = lbl.text;
-            div.style.left = (pos.x - 10) + 'px'; // Base positioning handled by CSS classes relative to this
-            div.style.top = (pos.y) + 'px';
+            // 指针
+            if (frame.ptrs.i === i) addPtr(stage, 'i', HEAP_POS[i].x+10, HEAP_POS[i].y-25, 'ptr-i');
 
-            // Adjust specific offsets based on class in CSS, but here we inject the DOM
-            // We need to append to container, but position relative to the node coordinates
-            // To simplify, let's just use the pos.x/y and css transforms
-
-            container.appendChild(div);
+            stage.appendChild(node);
         });
     }
 
-    // ================= CONTROLS =================
-    function nextStep() {
-        if (currentStepIndex < steps.length - 1) {
-            currentStepIndex++;
-            render(currentStepIndex);
+    function renderQuick(stage, frame) {
+        const row = document.createElement('div');
+        row.className = 'quick-row';
+
+        frame.nums.forEach((val, i) => {
+            const node = document.createElement('div');
+            node.className = 'node-base quick-node';
+            node.innerText = val;
+
+            const idxLbl = document.createElement('div');
+            idxLbl.className = 'idx-tag';
+            idxLbl.innerText = i;
+            node.appendChild(idxLbl);
+
+            // 状态
+            if (i < frame.ptrs.left || i > frame.ptrs.right) node.classList.add('hl-inactive');
+            if (i === frame.ptrs.pivot) node.classList.add('hl-pivot');
+            if (i === frame.ptrs.target) node.style.border = '2px dashed blue';
+
+            if (frame.active.includes(i)) {
+                if (frame.type === 'compare') node.classList.add('hl-compare');
+                if (frame.type === 'swap') node.classList.add('hl-swap');
+                if (frame.type === 'found') node.classList.add('hl-sorted');
+            }
+
+            // 指针 (相对定位)
+            if (i === frame.ptrs.i) addPtr(node, 'i', 12, -30, 'ptr-i', true);
+            if (i === frame.ptrs.store) addPtr(node, 'j', 12, 45, 'ptr-j', true); // quick logic var is sometimes store
+
+            row.appendChild(node);
+        });
+        stage.appendChild(row);
+    }
+
+    function addPtr(parent, txt, x, y, cls, isRelative=false) {
+        const p = document.createElement('div');
+        p.className = `ptr ${cls}`;
+        p.innerText = txt;
+        if (isRelative) {
+            p.style.top = y + 'px';
+            p.style.left = x + 'px';
+        } else {
+            p.style.left = x + 'px';
+            p.style.top = y + 'px';
+        }
+        parent.appendChild(p);
+    }
+
+    // ===========================
+    // 3. 控制与交互 (Controls)
+    // ===========================
+
+    function switchMode(m) {
+        mode = m;
+        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+        document.querySelector(`.t-${m}`).classList.add('active');
+        init();
+    }
+
+    function init() {
+        stopPlay();
+        const str = document.getElementById('arrIn').value;
+        const k = parseInt(document.getElementById('kIn').value);
+        let arr = str.split(',').map(n => parseInt(n.trim()));
+
+        if (arr.length > 10) { alert("为了演示效果，建议数组长度 <= 10"); arr = arr.slice(0,10); }
+
+        frames = (mode === 'heap') ? generateHeapFrames(arr, k) : generateQuickFrames(arr, k);
+
+        document.getElementById('progressBar').max = Math.max(0, frames.length - 1);
+        curFrame = 0;
+        renderFrame(0);
+    }
+
+    function togglePlay() {
+        if (isPlaying) stopPlay();
+        else {
+            isPlaying = true;
+            document.getElementById('playBtn').innerText = '⏸';
+            if (curFrame >= frames.length - 1) curFrame = 0;
+            const delay = parseInt(document.getElementById('speedSel').value);
+            timer = setInterval(() => step(1), delay);
         }
     }
 
-    function prevStep() {
-        if (currentStepIndex > 0) {
-            currentStepIndex--;
-            render(currentStepIndex);
+    function stopPlay() {
+        isPlaying = false;
+        clearInterval(timer);
+        document.getElementById('playBtn').innerText = '⏯';
+    }
+
+    function step(d) {
+        let next = curFrame + d;
+        if (next >= 0 && next < frames.length) {
+            curFrame = next;
+            renderFrame(curFrame);
+        } else {
+            stopPlay();
         }
     }
 
-    function reset() {
-        generateSteps();
-        currentStepIndex = 0;
-        render(0);
+    function seek(v) {
+        stopPlay();
+        curFrame = parseInt(v);
+        renderFrame(curFrame);
     }
 
     // Init
-    reset();
+    window.onload = init;
 
 </script>
 </body>

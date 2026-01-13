@@ -1,0 +1,539 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>回文子串算法：Manacher vs 中心扩展</title>
+    <style>
+        /* --- 基础布局 --- */
+        body{font-family:'Segoe UI',sans-serif;padding:20px;text-align:center;background:#f8fafc;color:#333;display:flex;flex-direction:column;align-items:center; min-height: 100vh;}
+        .container{background:white;padding:30px;border-radius:12px;box-shadow:0 4px 15px rgba(0,0,0,0.08);display:inline-block;max-width:1100px;width:95%; margin-bottom: 40px;}
+
+        /* --- 顶部控制 --- */
+        .controls-top { margin-bottom: 15px; display: flex; gap: 10px; justify-content: center; align-items: center; flex-wrap: wrap; }
+        input.arr-input { padding: 10px; border: 1px solid #cbd5e1; border-radius: 8px; width: 220px; text-align: center; font-size: 18px; letter-spacing: 1px;}
+
+        button { padding: 8px 16px; border: none; border-radius: 6px; cursor: pointer; transition: 0.2s; font-weight: 600; display: flex; align-items: center; gap: 5px; }
+        .btn-primary { background: #3b82f6; color: white; box-shadow: 0 2px 4px rgba(59, 130, 246, 0.3); }
+        .btn-primary:hover { background: #2563eb; }
+
+        /* --- 算法切换器 --- */
+        .algo-switch {
+            display: flex; background: #f1f5f9; padding: 4px; border-radius: 8px; margin-bottom: 20px;
+            width: fit-content; margin-left: auto; margin-right: auto; border: 1px solid #e2e8f0;
+        }
+        .algo-btn {
+            padding: 8px 24px; border-radius: 6px; border: none; background: transparent;
+            color: #64748b; font-weight: 600; cursor: pointer; font-size: 15px; transition: all 0.2s;
+        }
+        .algo-btn:hover { color: #334155; }
+        .algo-btn.active { background: white; color: #3b82f6; box-shadow: 0 2px 4px rgba(0,0,0,0.05); font-weight: bold;}
+
+        /* --- 播放控制 --- */
+        .controls-playback { margin-top: 10px; display: flex; gap: 10px; justify-content: center; align-items: center; background: #f8fafc; padding: 12px; border-radius: 10px; border: 1px solid #e2e8f0;}
+        .btn-control { background: white; border: 1px solid #cbd5e1; color: #334155; min-width: 40px; justify-content: center; font-size: 18px; box-shadow: 0 1px 2px rgba(0,0,0,0.05);}
+        .btn-control:hover { background: #f1f5f9; }
+        #progressBar { width: 300px; cursor: pointer; accent-color: #3b82f6; }
+
+        /* --- 可视化区域 --- */
+        .vis-wrapper {
+            overflow-x: auto;
+            padding: 65px 20px 60px 20px; /* 留足空间给指针 */
+            min-height: 200px;
+            display: flex; flex-direction: column; align-items: center;
+            border: 1px dashed #e2e8f0; border-radius: 8px; margin: 10px 0;
+            background: #fff;
+        }
+
+        .array-row { display: flex; margin-bottom: 5px; position: relative; }
+
+        /* 单元格 */
+        .cell-wrapper { display: flex; flex-direction: column; align-items: center; margin: 0 3px; position: relative; width: 42px;}
+        .cell {
+            width: 42px; height: 42px;
+            border: 1px solid #cbd5e1; background: white;
+            display: flex; justify-content: center; align-items: center;
+            font-weight: bold; font-family: monospace; font-size: 18px;
+            border-radius: 6px; z-index: 2;
+            transition: background 0.2s, border 0.2s;
+        }
+        .idx-label { margin-top: 4px; font-size: 10px; color: #94a3b8; }
+        .p-val { margin-top: 2px; font-size: 11px; color: #64748b; height: 14px; font-weight: bold; visibility: hidden;}
+        .p-val.show { visibility: visible; }
+
+        /* --- 颜色状态 --- */
+        .bg-i { border: 2px solid #ef4444; box-shadow: 0 0 8px rgba(239, 68, 68, 0.4); z-index: 10; }
+        .bg-mirror { background-color: #f3e8ff; border: 2px dashed #9333ea; }
+        .bg-match { background-color: #86efac; border-color: #22c55e; }
+        .bg-mismatch { background-color: #fca5a5; border-color: #ef4444; }
+        .bg-final { background-color: #fde047; border-color: #eab308; }
+        .bg-range { background-color: #ecfccb; }
+
+        /* --- 指针 --- */
+        .pointer {
+            position: absolute; font-size: 12px; font-weight: bold; padding: 2px 6px; border-radius: 4px;
+            transition: left 0.2s; white-space: nowrap; pointer-events: none;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1); z-index: 20;
+        }
+
+        /* 通用/Manacher指针 */
+        .ptr-c { color: #d97706; border: 1px solid #d97706; background: #fef3c7; top: -38px; }
+        .ptr-r { color: #059669; border: 1px solid #059669; background: #d1fae5; top: -38px; }
+        .ptr-i { color: #ef4444; font-size: 14px; top: -65px; font-weight: 800; border:none; background:transparent; box-shadow:none;}
+        .ptr-i::after { content: '↓'; display: block; text-align: center; font-size: 18px; }
+
+        /* 中心扩展法特有指针 */
+        .ptr-center-line {
+            position: absolute; top: -15px; width: 2px; height: 60px; background: #ef4444; opacity: 0.6; z-index: 0; transition: left 0.2s;
+        }
+        .ptr-center-line::after { content: 'Center'; position: absolute; top: -15px; left: -18px; font-size: 10px; color: #ef4444; font-weight: bold; }
+
+        /* 结果指针 */
+        .ptr-ans { color: #2563eb; border: 1px solid #2563eb; background: #eff6ff; bottom: -30px; }
+        .ptr-ans::before { content: '▲'; position: absolute; top: -10px; left: 50%; transform: translateX(-50%); color: #2563eb; font-size: 8px; }
+
+        /* --- 信息面板与图例 --- */
+        .info-panel { display: flex; gap: 15px; justify-content: center; margin-bottom: 10px; font-family: monospace; font-size: 14px; flex-wrap: wrap; min-height: 32px; }
+        .var-box { padding: 4px 10px; background: #f1f5f9; border-radius: 4px; border: 1px solid #e2e8f0; display:flex; align-items:center;}
+        .legend { display: flex; gap: 15px; font-size: 12px; color: #64748b; justify-content: center; margin-top: 5px; flex-wrap: wrap; min-height: 20px;}
+        .dot { width: 10px; height: 10px; display: inline-block; margin-right: 4px; border-radius: 2px; vertical-align: middle;}
+
+        .log-box {
+            width: 100%; height: 80px; overflow-y: auto;
+            background: #1e293b; color: #4ade80;
+            font-family: 'Consolas', monospace; font-size: 13px;
+            text-align: left; padding: 12px; border-radius: 8px; margin-top: 10px;
+            white-space: pre-wrap; box-sizing: border-box;
+        }
+
+        /* --- 对比表格 --- */
+        .comparison-section { margin-top: 40px; width: 100%; max-width: 1100px;}
+        .comp-table { width: 100%; border-collapse: collapse; background: white; box-shadow: 0 4px 6px rgba(0,0,0,0.05); border-radius: 8px; overflow: hidden; font-size: 15px;}
+        .comp-table th, .comp-table td { padding: 12px 15px; text-align: left; border-bottom: 1px solid #e2e8f0; }
+        .comp-table th { background: #f8fafc; color: #475569; font-weight: 600; }
+        .comp-table tr:last-child td { border-bottom: none; }
+        .comp-table tr:hover { background-color: #f8fafc; }
+        .tag { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 12px; font-weight: bold; }
+        .tag-bad { background: #fee2e2; color: #991b1b; }
+        .tag-good { background: #dcfce7; color: #166534; }
+        .tag-neu { background: #f1f5f9; color: #475569; }
+    </style>
+</head>
+<body>
+
+<div id="global-back-btn" style="position:fixed;top:15px;left:15px;z-index:9999;cursor:pointer;background:white;padding:8px 12px;border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,0.15);display:flex;align-items:center;gap:6px;border:1px solid #e2e8f0;transition:all 0.2s;user-select:none;">
+    <span style="font-size:16px;">🔙</span><span style="font-weight:600;font-size:14px;color:#334155;">返回</span>
+</div>
+<script>
+    document.getElementById('global-back-btn').addEventListener('click', () => {
+        if(window.opener) window.close(); else window.history.back();
+    });
+</script>
+
+<div class="container">
+    <h1>回文子串算法对比</h1>
+
+    <div class="algo-switch">
+        <button class="algo-btn active" id="btn-algo-center" onclick="switchAlgo('center')">中心扩展法 (Naive)</button>
+        <button class="algo-btn" id="btn-algo-manacher" onclick="switchAlgo('manacher')">Manacher 算法 (Optimized)</button>
+    </div>
+
+    <div class="controls-top">
+        <input type="text" id="strInput" class="arr-input" value="babad" maxlength="15" placeholder="输入字符串">
+        <button class="btn-primary" onclick="initAndRun()">🔄 重新生成</button>
+    </div>
+
+    <div class="info-panel" id="infoPanel"></div>
+    <div class="legend" id="legendPanel"></div>
+
+    <div class="vis-wrapper" id="visArea"></div>
+
+    <div class="controls-playback">
+        <button class="btn-control" onclick="step(-1)">⏮</button>
+        <button class="btn-control" id="btnPlay" onclick="togglePlay()">⏯</button>
+        <button class="btn-control" onclick="step(1)">⏭</button>
+        <input type="range" id="progressBar" value="0" min="0" max="0" oninput="scrub(this.value)">
+        <span id="stepCounter" style="min-width:60px; font-family:monospace; font-weight:bold;">0/0</span>
+    </div>
+
+    <div class="log-box" id="logBox">准备就绪...</div>
+</div>
+
+<div class="comparison-section">
+    <h3 style="margin-bottom: 15px; color:#334155;">🔎 算法核心对比</h3>
+    <table class="comp-table">
+        <thead>
+        <tr>
+            <th width="15%">算法名称</th>
+            <th width="15%">时间复杂度</th>
+            <th width="15%">空间复杂度</th>
+            <th width="25%">核心思想</th>
+            <th width="30%">优缺点分析</th>
+        </tr>
+        </thead>
+        <tbody>
+        <tr>
+            <td><strong>中心扩展法</strong><br><span style="font-size:12px;color:#64748b;">Center Expansion</span></td>
+            <td><span class="tag tag-bad">O(N²)</span></td>
+            <td><span class="tag tag-good">O(1)</span></td>
+            <td>枚举所有可能的中心点 (2N-1个)，向两边扩展直到不匹配。</td>
+            <td>
+                <span style="color:#166534">✔ 空间最省，逻辑简单易懂。</span><br>
+                <span style="color:#991b1b">✘ 存在大量重复计算（例如 "aaaaa"），最坏情况效率低。</span>
+            </td>
+        </tr>
+        <tr>
+            <td><strong>Manacher</strong><br><span style="font-size:12px;color:#64748b;">马拉车算法</span></td>
+            <td><span class="tag tag-good">O(N)</span></td>
+            <td><span class="tag tag-neu">O(N)</span></td>
+            <td>利用回文的<b>镜像对称性</b>。已知右边界 R 内的某个点，可以直接参考其关于中心 C 的对称点数值。</td>
+            <td>
+                <span style="color:#166534">✔ 严格线性时间，处理超长字符串极其快速。</span><br>
+                <span style="color:#991b1b">✘ 代码逻辑复杂，需要预处理字符串 (添加 #)。</span>
+            </td>
+        </tr>
+        </tbody>
+    </table>
+</div>
+
+<script>
+    // --- 全局状态 ---
+    let currentAlgo = 'center'; // 'center' or 'manacher'
+    let frames = [];
+    let currFrameIdx = 0;
+    let timer = null;
+    let isPlaying = false;
+    let dataArr = []; // 存储显示的字符数组 (原串 或 带#串)
+
+    // --- 1. 中心扩展法逻辑 ---
+    function generateCenterFrames(str) {
+        const history = [];
+        const n = str.length;
+        const chars = str.split('');
+        dataArr = chars; // 渲染用
+
+        let ansLeft = 0, ansRight = 0; // java substring(start, end) format [start, end)
+
+        const record = (msg, type, i, l, r) => {
+            history.push({
+                algo: 'center', type, msg,
+                i, l, r, ansLeft, ansRight,
+                maxlen: ansRight - ansLeft
+            });
+        };
+
+        record("算法开始", "init", -1, -1, -1);
+
+        for(let i = 0; i < 2 * n - 1; i++){
+            let l = Math.floor(i / 2);
+            let r = Math.floor((i + 1) / 2);
+
+            record(`Step i=${i}: 中心扩展开始`, "start_loop", i, l, r);
+
+            let matched = false;
+            while(l >= 0 && r < n && chars[l] === chars[r]){
+                matched = true;
+                record(`S[${l}] == S[${r}] (${chars[l]}), 匹配成功`, "match", i, l, r);
+                l--; r++;
+            }
+
+            if(!matched) record(`S[${l}] != S[${r}], 无法扩展`, "mismatch", i, l, r);
+            else record(`扩展结束，边界 (${l+1}, ${r-1})`, "stop", i, l, r);
+
+            // 更新最大值 (注意此时 l和r 已经多走了一格)
+            // 真实长度 = (r-1) - (l+1) + 1 = r - l - 1
+            if(r - l - 1 > ansRight - ansLeft){
+                ansLeft = l + 1;
+                ansRight = r;
+                record(`更新最优解: [${ansLeft}, ${ansRight})`, "update_ans", i, l, r);
+            }
+        }
+        record(`结束。最长回文: "${str.substring(ansLeft, ansRight)}"`, "done", -1, -1, -1);
+        return history;
+    }
+
+    // --- 2. Manacher 逻辑 ---
+    function generateManacherFrames(str) {
+        const history = [];
+        // 预处理
+        const n = str.length * 2 + 1;
+        const ss = new Array(n);
+        let j = 0;
+        for (let i = 0; i < n; i++) ss[i] = (i & 1) === 0 ? '#' : str[j++];
+        dataArr = ss; // 渲染用
+
+        const p = new Array(n).fill(0);
+        let maxLen = 0, startPos = 0; // 记录原串信息用于最终展示
+        let c = 0, r = 0; // Manacher 变量
+        let endIdxInSS = 0; // 用于在ss数组画结果指针
+
+        const record = (msg, type, i, len, compL=-1, compR=-1) => {
+            history.push({
+                algo: 'manacher', type, msg,
+                i, c, r, len,
+                p: [...p],
+                endIdxInSS,
+                compL, compR
+            });
+        };
+
+        record("预处理字符串完成", "init", 0, 0);
+
+        for (let i = 0; i < n; i++) {
+            let len = 1;
+            if (r > i) {
+                let mirror = 2 * c - i;
+                len = Math.min(p[mirror], r - i);
+                record(`利用对称性: i=${i}, mirror=${mirror}, min(p[mirror], r-i)=${len}`, "calc", i, len);
+            } else {
+                record(`i=${i} >= R, 无法利用对称性, len=1`, "calc", i, len);
+            }
+
+            while (i + len < n && i - len >= 0) {
+                const left = i - len, right = i + len;
+                record(`比较 ss[${left}] vs ss[${right}]`, "compare", i, len, left, right);
+                if (ss[right] === ss[left]) len++;
+                else {
+                    record(`不匹配`, "mismatch", i, len, left, right);
+                    break;
+                }
+            }
+
+            if (i + len > r) {
+                r = i + len; c = i;
+                record(`更新 Center=${c}, R=${r}`, "update_cr", i, len);
+            }
+
+            if (len - 1 > maxLen) {
+                maxLen = len - 1;
+                // 计算在 SS 中的结束位置用于可视化
+                endIdxInSS = i + len - 1;
+                record(`更新最大长度=${maxLen}`, "update_max", i, len);
+            }
+            p[i] = len;
+            record(`Step i=${i} 完成`, "finish_step", i, len);
+        }
+        record(`算法结束`, "done", n, 0);
+        return history;
+    }
+
+    // --- 3. 渲染逻辑 (UI 核心) ---
+    function renderFrame(idx) {
+        if (idx < 0 || idx >= frames.length) return;
+        const frame = frames[idx];
+
+        // A. 更新面板数值
+        if(currentAlgo === 'center') {
+            document.getElementById('val-i').innerText = frame.i === -1 ? '-' : frame.i;
+            document.getElementById('val-l').innerText = frame.l === -1 ? '-' : frame.l;
+            document.getElementById('val-r').innerText = frame.r === -1 ? '-' : frame.r;
+            document.getElementById('val-maxlen').innerText = frame.maxlen !== undefined ? frame.maxlen : '-';
+        } else {
+            document.getElementById('val-i').innerText = frame.i >= dataArr.length ? '-' : frame.i;
+            document.getElementById('val-c').innerText = frame.c;
+            document.getElementById('val-r').innerText = frame.r;
+            document.getElementById('val-len').innerText = frame.len;
+        }
+
+        document.getElementById('logBox').innerText = frame.msg;
+        document.getElementById('progressBar').value = idx;
+        document.getElementById('stepCounter').innerText = `${idx + 1}/${frames.length}`;
+
+        // B. 渲染 DOM 数组
+        const container = document.getElementById('visArea');
+        container.innerHTML = '';
+
+        const row = document.createElement('div');
+        row.className = 'array-row';
+        const cellWidth = 48; // width + margins
+
+        // 指针渲染辅助
+        const addPtr = (cls, text, idx, offset=0, extraStyle='') => {
+            const d = document.createElement('div');
+            d.className = `pointer ${cls}`;
+            d.innerText = text;
+            d.style.left = (idx * cellWidth + 10 + offset) + 'px';
+            if(extraStyle) d.style.cssText += extraStyle;
+            row.appendChild(d);
+        };
+
+        // --- 渲染特定算法的指针 ---
+        if(currentAlgo === 'center') {
+            // Ans Range Markers
+            if(frame.ansRight > frame.ansLeft) {
+                addPtr('ptr-ans', 'AnsL', frame.ansLeft, -5);
+                addPtr('ptr-ans', 'AnsR', frame.ansRight, -20); // Point to gap
+            }
+            // L & R
+            if(frame.l !== -1) addPtr('ptr-l', 'L', frame.l);
+            if(frame.r !== -1 && frame.r < dataArr.length) addPtr('ptr-r-exp', 'R', frame.r);
+            // Center Line
+            if (frame.i !== -1) {
+                const ptrC = document.createElement('div');
+                ptrC.className = 'ptr-center-line';
+                ptrC.style.left = ((frame.i / 2) * cellWidth + 21) + 'px'; // 精确计算像素位置
+                row.appendChild(ptrC);
+            }
+        } else {
+            // Manacher Pointers
+            addPtr('ptr-c', 'C', frame.c);
+            addPtr('ptr-r', 'R', frame.r);
+            if(frame.endIdxInSS > 0) addPtr('ptr-ans', 'MaxEnd', frame.endIdxInSS, -5);
+        }
+
+        // --- 渲染单元格 ---
+        dataArr.forEach((char, index) => {
+            const wrap = document.createElement('div');
+            wrap.className = 'cell-wrapper';
+
+            const cell = document.createElement('div');
+            cell.className = 'cell';
+            cell.innerText = char;
+
+            // 样式逻辑
+            if(currentAlgo === 'center') {
+                // Ans Range
+                if (index >= frame.ansLeft && index < frame.ansRight) cell.classList.add('bg-final');
+                // Matching
+                if (frame.type === 'match' && (index === frame.l || index === frame.r)) cell.classList.add('bg-match');
+                if (frame.type === 'mismatch' && (index === frame.l || index === frame.r)) cell.classList.add('bg-mismatch');
+
+            } else {
+                // Manacher Styles
+                if (index === frame.i) {
+                    cell.classList.add('bg-i');
+                    const ptrI = document.createElement('div');
+                    ptrI.className = 'pointer ptr-i';
+                    ptrI.style.position='absolute'; ptrI.style.left='5px';
+                    wrap.appendChild(ptrI);
+                }
+                // Mirror
+                if (frame.type === 'calc' && frame.r > frame.i) {
+                    if (index === 2 * frame.c - frame.i) cell.classList.add('bg-mirror');
+                }
+                // Compare
+                if ((frame.type === 'compare' || frame.type === 'mismatch') && (index === frame.compL || index === frame.compR)) {
+                    cell.classList.add(frame.type === 'mismatch' ? 'bg-mismatch' : 'bg-match');
+                }
+                // Range
+                if(index > frame.i - frame.len && index < frame.i + frame.len && index !== frame.i) {
+                    cell.style.backgroundColor = '#ecfccb';
+                }
+            }
+
+            // Manacher P values
+            const pVal = document.createElement('div');
+            pVal.className = 'p-val';
+            if(currentAlgo === 'manacher' && frame.p[index] > 0) {
+                pVal.innerText = frame.p[index];
+                pVal.classList.add('show');
+            }
+
+            const idxLabel = document.createElement('div');
+            idxLabel.className = 'idx-label';
+            idxLabel.innerText = index;
+
+            wrap.appendChild(cell);
+            wrap.appendChild(pVal);
+            wrap.appendChild(idxLabel);
+            row.appendChild(wrap);
+        });
+
+        container.appendChild(row);
+
+        // Auto Scroll
+        const focusIdx = (currentAlgo === 'center') ? (frame.i/2) : frame.i;
+        if (focusIdx * cellWidth > container.clientWidth / 2) {
+            container.scrollLeft = (focusIdx * cellWidth) - (container.clientWidth / 2);
+        } else {
+            container.scrollLeft = 0;
+        }
+    }
+
+    // --- 切换与控制 ---
+    function switchAlgo(algoName) {
+        currentAlgo = algoName;
+        // UI Tabs
+        document.querySelectorAll('.algo-btn').forEach(b => b.classList.remove('active'));
+        document.getElementById('btn-algo-' + algoName).classList.add('active');
+
+        // Update Info Panel HTML
+        const panel = document.getElementById('infoPanel');
+        const legend = document.getElementById('legendPanel');
+
+        if(algoName === 'center') {
+            panel.innerHTML = `
+                <div class="var-box">i (Loop) = <span id="val-i">-</span></div>
+                <div class="var-box" style="color:#d97706">L = <span id="val-l">-</span></div>
+                <div class="var-box" style="color:#059669">R = <span id="val-r">-</span></div>
+                <div class="var-box" style="border-color:#eab308;background:#fefce8">MaxLen = <span id="val-maxlen">0</span></div>
+            `;
+            legend.innerHTML = `
+                <span><span class="dot" style="background:#ef4444;"></span>中心轴</span>
+                <span><span class="dot" style="background:#86efac;"></span>尝试匹配</span>
+                <span><span class="dot" style="background:#fde047;"></span>当前最优解</span>
+            `;
+        } else {
+            panel.innerHTML = `
+                <div class="var-box">i (Curr) = <span id="val-i">-</span></div>
+                <div class="var-box" style="color:#d97706">C (Center) = <span id="val-c">-</span></div>
+                <div class="var-box" style="color:#059669">R (Bound) = <span id="val-r">-</span></div>
+                <div class="var-box">Len (Radius) = <span id="val-len">-</span></div>
+            `;
+            legend.innerHTML = `
+                <span><span class="dot" style="border:2px solid #ef4444;"></span>当前 i</span>
+                <span><span class="dot" style="background:#f3e8ff; border:1px dashed #9333ea"></span>镜像点 Mirror</span>
+                <span><span class="dot" style="background:#ecfccb;"></span>P[i]覆盖范围</span>
+            `;
+        }
+
+        initAndRun();
+    }
+
+    function initAndRun() {
+        stopPlay();
+        const str = document.getElementById('strInput').value || 'babad';
+
+        if(currentAlgo === 'center') frames = generateCenterFrames(str);
+        else frames = generateManacherFrames(str);
+
+        document.getElementById('progressBar').max = Math.max(0, frames.length - 1);
+        scrub(0);
+    }
+
+    function step(delta) {
+        let next = currFrameIdx + delta;
+        if (next >= 0 && next < frames.length) {
+            currFrameIdx = next;
+            renderFrame(currFrameIdx);
+        } else if (isPlaying) stopPlay();
+    }
+
+    function scrub(val) {
+        stopPlay();
+        currFrameIdx = parseInt(val);
+        renderFrame(currFrameIdx);
+    }
+
+    function togglePlay() {
+        if (isPlaying) stopPlay(); else startPlay();
+    }
+
+    function startPlay() {
+        if (currFrameIdx >= frames.length - 1) currFrameIdx = 0;
+        isPlaying = true;
+        document.getElementById('btnPlay').innerText = '⏸';
+        let speed = currentAlgo === 'manacher' ? 400 : 250; // Manacher slightly slower to read
+        timer = setInterval(() => step(1), speed);
+    }
+
+    function stopPlay() {
+        isPlaying = false;
+        document.getElementById('btnPlay').innerText = '⏯';
+        clearInterval(timer);
+    }
+
+    // Init
+    window.onload = () => switchAlgo('center');
+</script>
+</body>
+</html>
